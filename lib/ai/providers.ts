@@ -1,12 +1,11 @@
-import { gateway } from "@ai-sdk/gateway";
+import { deepseek } from "@ai-sdk/deepseek";
 import {
   customProvider,
   extractReasoningMiddleware,
   wrapLanguageModel,
 } from "ai";
+import { zhipu } from "zhipu-ai-provider";
 import { isTestEnvironment } from "../constants";
-import { deepseek } from '@ai-sdk/deepseek';
-import { zhipu } from 'zhipu-ai-provider';
 
 export const myProvider = isTestEnvironment
   ? (() => {

@@ -12,7 +12,11 @@ export const entitlementsByUserType: Record<UserType, Entitlements> = {
    */
   guest: {
     maxMessagesPerDay: 20,
-    availableChatModelIds: ["chat-model", "chat-model-reasoning", "chat-model-glm"],
+    availableChatModelIds: [
+      "chat-model",
+      "chat-model-reasoning",
+      "chat-model-glm",
+    ],
   },
 
   /*
@@ -20,7 +24,11 @@ export const entitlementsByUserType: Record<UserType, Entitlements> = {
    */
   regular: {
     maxMessagesPerDay: 100,
-    availableChatModelIds: ["chat-model", "chat-model-reasoning", "chat-model-glm"],
+    availableChatModelIds: [
+      "chat-model",
+      "chat-model-reasoning",
+      "chat-model-glm",
+    ],
   },
 
   /*

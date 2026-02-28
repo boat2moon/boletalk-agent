@@ -50,7 +50,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                 className="h-10 bg-background data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 data-testid="user-nav-button"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* biome-ignore lint: WSL2 workaround - Next.js Image resolves to private IP */}
                 <img
                   alt={user.email ?? "User Avatar"}
                   className="size-6 rounded-full"
