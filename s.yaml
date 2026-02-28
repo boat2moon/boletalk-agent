@@ -24,7 +24,7 @@ resources:
         # -------------------------------------------------------------------------
         # 构建 Next.js standalone 产物
         # -------------------------------------------------------------------------
-        - run: export PATH=/usr/local/versions/node/v20.8.1/bin:$PATH && pnpm run build
+        - run: export PATH=/usr/local/versions/node/v20.8.1/bin:$PATH && npx next build
         - run: cp -r public .next/standalone/public
         - run: mv static standalone/.next/static
           path: ./.next
