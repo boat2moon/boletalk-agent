@@ -1,0 +1,78 @@
+edition: 3.0.0
+name: boletalk-agent-app
+access: "default"
+vars:
+  region: "ap-southeast-1"
+  functionName: "boletalk-agent"
+resources:
+  framework:
+    component: fc3
+    actions:
+      pre-deploy:
+        # -------------------------------------------------------------------------
+        # 安装依赖（本项目使用 pnpm）
+        # -------------------------------------------------------------------------
+        - run: export PATH=/usr/local/versions/node/v20.8.1/bin:$PATH && npm install -g pnpm@9
+        - run: export PATH=/usr/local/versions/node/v20.8.1/bin:$PATH && pnpm install
+        # -------------------------------------------------------------------------
+        # 生成 .env.local 文件，引用流水线环境变量
+        # -------------------------------------------------------------------------
+        - run: echo "POSTGRES_URL=${env(POSTGRES_URL)}" > .env.local
+        - run: echo "DEEPSEEK_API_KEY=${env(DEEPSEEK_API_KEY)}" >> .env.local
+        - run: echo "ZHIPU_API_KEY=${env(ZHIPU_API_KEY)}" >> .env.local
+        - run: echo "AUTH_SECRET=${env(AUTH_SECRET)}" >> .env.local
+        # -------------------------------------------------------------------------
+        # 构建 Next.js standalone 产物
+        # -------------------------------------------------------------------------
+        - run: export PATH=/usr/local/versions/node/v20.8.1/bin:$PATH && pnpm run build
+        - run: cp -r public .next/standalone/public
+        - run: mv static standalone/.next/static
+          path: ./.next
+    props:
+      region: ${vars.region}
+      description: BoleTalk AI Agent - 全栈应用
+      runtime: custom.debian10
+      timeout: 60
+      memorySize: 512
+      layers:
+        - acs:fc:${vars.region}:official:layers/Nodejs20/versions/1
+      # -------------------------------------------------------------------------
+      # 运行时环境变量
+      # -------------------------------------------------------------------------
+      environmentVariables:
+        PATH: >-
+          /opt/nodejs20/bin:/usr/local/bin/apache-maven/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/ruby/bin
+        NODE_ENV: production
+        POSTGRES_URL: ${env(POSTGRES_URL)}
+        DEEPSEEK_API_KEY: ${env(DEEPSEEK_API_KEY)}
+        ZHIPU_API_KEY: ${env(ZHIPU_API_KEY)}
+        AUTH_SECRET: ${env(AUTH_SECRET)}
+      customRuntimeConfig:
+        command:
+          - node
+          - server.js
+        port: 3000
+      functionName: ${vars.functionName}
+      code: ./.next/standalone
+      triggers:
+        - triggerName: httpTrigger
+          triggerType: http
+          triggerConfig:
+            authType: anonymous
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+  fc3_domain_0:
+    component: fc3-domain
+    props:
+      region: ${vars.region}
+      domainName: auto
+      protocol: HTTP
+      routeConfig:
+        routes:
+          - path: /*
+            functionName: ${vars.functionName}
