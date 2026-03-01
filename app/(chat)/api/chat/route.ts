@@ -233,6 +233,7 @@ export async function POST(request: Request) {
       messages: uiMessages,
       selectedChatModel,
       requestHints,
+      // biome-ignore lint/style/noNonNullAssertion: session is checked above via auth()
       session: session!,
       // onFinish 回调：保存 AI 回复消息和 usage 到数据库
       onFinish: async ({ messages: finishedMessages, usage }) => {

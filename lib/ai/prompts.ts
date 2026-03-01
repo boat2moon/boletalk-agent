@@ -63,6 +63,7 @@ About the origin of user's request:
 
 export const systemPrompt = ({
   selectedChatModel,
+  // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for future use
   requestHints,
 }: {
   selectedChatModel: string;

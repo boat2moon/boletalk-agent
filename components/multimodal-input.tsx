@@ -501,6 +501,7 @@ function PureModelSelectorCompact({
           onModelChange?.(model.id);
           // 使用客户端 cookie 操作替代 Server Action
           // Server Action 会触发页面 revalidation，导致 attachments 等状态丢失
+          // biome-ignore lint/suspicious/noDocumentCookie: intentional client-side cookie for model selection
           document.cookie = `chat-model=${model.id}; path=/; max-age=${60 * 60 * 24 * 365}`;
         }
       }}

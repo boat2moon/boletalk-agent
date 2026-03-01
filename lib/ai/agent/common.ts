@@ -156,6 +156,7 @@ export function createDefaultStream({
   messages,
   selectedChatModel,
   requestHints,
+  // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for future use when tools are re-enabled
   session,
   dataStream,
   onUsageUpdate,

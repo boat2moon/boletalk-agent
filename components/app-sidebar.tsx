@@ -99,6 +99,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       onClick={() => {
                         setOpenMobile(false);
                         // 新建聊天时重置模型为默认的 GLM
+                        // biome-ignore lint/suspicious/noDocumentCookie: intentional client-side cookie for model reset
                         document.cookie = `chat-model=chat-model-glm; path=/; max-age=${60 * 60 * 24 * 365}`;
                         router.push("/");
                         router.refresh();

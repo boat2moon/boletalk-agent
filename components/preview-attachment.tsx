@@ -33,6 +33,7 @@ export const PreviewAttachment = ({
         <div
           aria-label="PDF attachment"
           className="flex items-center justify-center text-muted-foreground text-xs"
+          role="img"
           style={{ width: 52, height: 52 }}
         >
           {/* PDF 图标 SVG */}
