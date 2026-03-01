@@ -17,6 +17,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // 放行监控接口，无需鉴权
+  // 心跳检测工具（如 cron-job.org）需要直接访问这些接口来检查服务/数据库状态
+  if (pathname.startsWith("/api/monitor")) {
+    return NextResponse.next();
+  }
+
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,

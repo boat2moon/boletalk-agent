@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -53,6 +54,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // 获取当前运行环境，用于条件加载百度统计等生产环境专用脚本
+  const nodeEnv = process.env.NODE_ENV || "development";
   return (
     <html
       className={`${geist.variable} ${geistMono.variable}`}
@@ -65,7 +68,6 @@ export default function RootLayout({
     >
       <head>
         <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: "Required"
           dangerouslySetInnerHTML={{
             __html: THEME_COLOR_SCRIPT,
           }}
@@ -82,6 +84,24 @@ export default function RootLayout({
           <SessionProvider>{children}</SessionProvider>
         </ThemeProvider>
       </body>
+
+      {/* 百度统计：仅在生产环境下加载，用于收集网站访问数据（PV/UV等） */}
+      {nodeEnv === "production" && (
+        <Script
+          dangerouslySetInnerHTML={{
+            __html: `
+              var _hmt = _hmt || [];
+              (function() {
+                var hm = document.createElement("script");
+                hm.src = "https://hm.baidu.com/hm.js?5dc4ce157001caaeff5fca95cd745acb";
+                var s = document.getElementsByTagName("script")[0];
+                s.parentNode.insertBefore(hm, s);
+              })();
+            `,
+          }}
+          id="baidu-tongji-script"
+        />
+      )}
     </html>
   );
 }

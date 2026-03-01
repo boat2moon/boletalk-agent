@@ -24,6 +24,10 @@
         /* Needed for generateUUID() */
         "noBitwiseOperators": "off"
       },
+      "security": {
+        /* 项目中有多处合法使用 dangerouslySetInnerHTML（主题色脚本、百度统计等） */
+        "noDangerouslySetInnerHtml": "off"
+      },
       "style": {
         /* Allowing magic numbers */
         "noMagicNumbers": "off",
