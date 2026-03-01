@@ -31,7 +31,6 @@ export async function GET() {
     });
 
     // 根据用户类型获取每日最大调用次数
-    // @ts-expect-error
     const max = entitlementsByUserType[userType].maxChatApiCallsPerDay;
 
     return Response.json({ used, max });
