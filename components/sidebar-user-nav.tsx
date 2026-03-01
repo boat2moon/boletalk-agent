@@ -4,6 +4,17 @@ import { ChevronUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { signOut, useSession } from "next-auth/react";
+import { useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +33,7 @@ import { toast } from "./toast";
 export function SidebarUserNav({ user }: { user: User }) {
   const router = useRouter();
   const { data, status } = useSession();
+  const [showGuestLogoutDialog, setShowGuestLogoutDialog] = useState(false);
 
   const isGuest = guestRegex.test(data?.user?.email ?? "");
 
@@ -91,9 +103,54 @@ export function SidebarUserNav({ user }: { user: User }) {
                 {isGuest ? "登录账户" : "退出登录"}
               </button>
             </DropdownMenuItem>
+            {isGuest && (
+              <>
+                <DropdownMenuItem
+                  asChild
+                  data-testid="user-nav-item-guest-clear"
+                >
+                  <button
+                    className="w-full cursor-pointer"
+                    onClick={() => setShowGuestLogoutDialog(true)}
+                    type="button"
+                  >
+                    退出访客
+                  </button>
+                </DropdownMenuItem>
+                <div className="px-2 py-1.5 text-muted-foreground text-xs">
+                  访客模式下数据不会长期保存，建议登录账户
+                </div>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
+
+      <AlertDialog
+        onOpenChange={setShowGuestLogoutDialog}
+        open={showGuestLogoutDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认退出访客模式？</AlertDialogTitle>
+            <AlertDialogDescription>
+              退出后，访客模式下的聊天记录将无法恢复。如需保存数据，请先登录账户。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                signOut({
+                  redirectTo: "/",
+                });
+              }}
+            >
+              确认退出
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarMenu>
   );
 }

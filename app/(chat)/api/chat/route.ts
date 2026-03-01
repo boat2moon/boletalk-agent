@@ -266,6 +266,21 @@ export async function POST(request: Request) {
       return error.toResponse();
     }
 
+    // Check for AI API rate limit / retry exhaustion errors (e.g., 429 from upstream AI provider)
+    if (
+      error instanceof Error &&
+      (error.message?.includes("429") ||
+        error.message?.includes("访问量过大") ||
+        error.message?.includes("稍后再试") ||
+        error.name === "AI_RetryError")
+    ) {
+      return new ChatSDKError(
+        "rate_limit:chat",
+        undefined,
+        "AI 模型当前访问量过大，请稍后再试"
+      ).toResponse();
+    }
+
     // Check for Vercel AI Gateway credit card error
     if (
       error instanceof Error &&

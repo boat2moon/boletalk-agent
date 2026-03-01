@@ -131,6 +131,11 @@ export function Chat({
             description: error.message,
           });
         }
+      } else {
+        toast({
+          type: "error",
+          description: error.message || "发送消息失败，请检查网络连接后重试",
+        });
       }
     },
   });

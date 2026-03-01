@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { PlusIcon, TrashIcon } from "@/components/icons";
+import { BoleTalkIcon } from "@/components/icons/boletalk-icon";
 import {
   getChatHistoryPaginationKey,
   SidebarHistory,
@@ -70,7 +71,8 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                   setOpenMobile(false);
                 }}
               >
-                <span className="cursor-pointer rounded-md px-2 font-semibold text-blue-600 text-lg hover:bg-muted">
+                <span className="flex cursor-pointer items-center gap-1.5 rounded-md px-2 font-semibold text-blue-600 text-lg hover:bg-muted">
+                  <BoleTalkIcon className="size-5" />
                   伯乐Talk
                 </span>
               </Link>
@@ -101,7 +103,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                         // 新建聊天时重置模型为默认的 GLM
                         // biome-ignore lint/suspicious/noDocumentCookie: intentional client-side cookie for model reset
                         document.cookie = `chat-model=chat-model-glm; path=/; max-age=${60 * 60 * 24 * 365}`;
-                        router.push("/");
+                        router.push("/chat");
                         router.refresh();
                       }}
                       type="button"

@@ -134,7 +134,6 @@ export function DemoSection() {
           className="w-full"
           opts={{
             align: "start",
-            loop: true,
           }}
           setApi={setCarouselApi}
         >

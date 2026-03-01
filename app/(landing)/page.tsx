@@ -193,15 +193,34 @@ export default function HomePage() {
           <p className="mx-auto max-w-2xl text-balance text-lg opacity-80">
             立即与 AI 面试官对话，获取专业的面试指导和建议
           </p>
-          <div className="pt-4">
+          <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
+            <Link href="/login">
+              <Button
+                className="w-full cursor-pointer bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
+                size="lg"
+              >
+                登录 / 注册
+                <ArrowRight className="ml-2 size-4" />
+              </Button>
+            </Link>
             <Link href="/api/auth/guest?redirectUrl=/chat">
               <Button
-                className="w-full sm:w-auto"
+                className="w-full cursor-pointer bg-transparent sm:w-auto"
                 size="lg"
-                variant="secondary"
+                variant="outline"
               >
-                开始对话
-                <ArrowRight className="ml-2 size-4" />
+                访客登录
+                <UserPlus className="ml-2 size-4" />
+              </Button>
+            </Link>
+            <Link href="mailto:boletalk@example.com" target="_blank">
+              <Button
+                className="w-full cursor-pointer bg-transparent sm:w-auto"
+                size="lg"
+                variant="outline"
+              >
+                联系开发者
+                <Mail className="ml-2 size-4" />
               </Button>
             </Link>
           </div>

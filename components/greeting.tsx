@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { BoleTalkIcon } from "@/components/icons/boletalk-icon";
 
 export const Greeting = () => {
   return (
@@ -8,11 +9,12 @@ export const Greeting = () => {
     >
       <motion.div
         animate={{ opacity: 1, y: 0 }}
-        className="font-semibold text-blue-600 text-xl md:text-2xl"
+        className="flex items-center gap-2 font-semibold text-blue-600 text-xl md:text-2xl"
         exit={{ opacity: 0, y: 10 }}
         initial={{ opacity: 0, y: 10 }}
         transition={{ delay: 0.5 }}
       >
+        <BoleTalkIcon className="size-7" />
         伯乐Talk
       </motion.div>
       <motion.div
