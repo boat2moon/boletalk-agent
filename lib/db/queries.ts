@@ -22,6 +22,7 @@ import { generateUUID } from "../utils";
 import {
   type Chat,
   chat,
+  chatApiCall,
   type DBMessage,
   document,
   message,
@@ -588,6 +589,59 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get stream ids by chat id"
+    );
+  }
+}
+
+/**
+ * 记录一次 API 调用
+ * 每次用户发送聊天请求时调用此函数，用于后续的次数统计
+ */
+export async function recordChatApiCall({ userId }: { userId: string }) {
+  try {
+    return await db.insert(chatApiCall).values({
+      userId,
+      createdAt: new Date(),
+    });
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to record chat API call"
+    );
+  }
+}
+
+/**
+ * 查询用户在指定时间段内的 API 调用次数
+ * 用于判断用户是否超出每日调用上限
+ *
+ * @param id - 用户 ID
+ * @param differenceInHours - 时间范围（小时），通常为 24
+ * @returns API 调用次数
+ */
+export async function getChatApiCallCountByUserId({
+  id,
+  differenceInHours,
+}: {
+  id: string;
+  differenceInHours: number;
+}) {
+  try {
+    const timeAgo = new Date(Date.now() - differenceInHours * 60 * 60 * 1000);
+
+    const [stats] = await db
+      .select({ count: count(chatApiCall.id) })
+      .from(chatApiCall)
+      .where(
+        and(eq(chatApiCall.userId, id), gte(chatApiCall.createdAt, timeAgo))
+      )
+      .execute();
+
+    return stats?.count ?? 0;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get chat API call count by user id"
     );
   }
 }

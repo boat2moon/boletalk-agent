@@ -1,9 +1,11 @@
 import type { InferUITool, UIMessage } from "ai";
 import { z } from "zod";
 import type { ArtifactKind } from "@/components/artifact";
+import type { getBehaviouralQuestionsTool } from "./ai/tools/behavioural-questions";
 import type { createDocument } from "./ai/tools/create-document";
 import type { getWeather } from "./ai/tools/get-weather";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
+import type { getResumeTemplateTool } from "./ai/tools/resume-template";
 import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/schema";
 import type { AppUsage } from "./usage";
@@ -22,12 +24,18 @@ type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
 type requestSuggestionsTool = InferUITool<
   ReturnType<typeof requestSuggestions>
 >;
+type getResumeTemplateToolType = InferUITool<typeof getResumeTemplateTool>;
+type getBehaviouralQuestionsToolType = InferUITool<
+  typeof getBehaviouralQuestionsTool
+>;
 
 export type ChatTools = {
   getWeather: weatherTool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;
   requestSuggestions: requestSuggestionsTool;
+  getResumeTemplate: getResumeTemplateToolType;
+  getBehaviouralQuestions: getBehaviouralQuestionsToolType;
 };
 
 export type CustomUIDataTypes = {
@@ -54,5 +62,6 @@ export type ChatMessage = UIMessage<
 export type Attachment = {
   name: string;
   url: string;
+  base64?: string; // PDF 文件的 base64 编码内容（可选）
   contentType: string;
 };

@@ -263,6 +263,30 @@ const PurePreviewMessage = ({
               );
             }
 
+            if (type === "tool-getResumeTemplate") {
+              // 简历模板 tool 的渲染：显示模板内容
+              const { toolCallId } = part;
+              return (
+                <div key={toolCallId}>
+                  <Response>
+                    {part.output?.template ?? "无法获取简历模板"}
+                  </Response>
+                </div>
+              );
+            }
+
+            if (type === "tool-getBehaviouralQuestions") {
+              // 行为面试题 tool 的渲染：显示面试题内容
+              const { toolCallId } = part;
+              return (
+                <div key={toolCallId}>
+                  <Response>
+                    {part.output?.content ?? "无法获取行为面试题"}
+                  </Response>
+                </div>
+              );
+            }
+
             return null;
           })}
 
