@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    // @ts-expect-error
+    // @ts-expect-error - requestBody.message.parts file type url is optional vs required
     const {
       id,
       message,
@@ -108,7 +108,6 @@ export async function POST(request: Request) {
     });
 
     // 根据用户类型获取每日最大调用次数
-    // @ts-expect-error
     const maxApiCalls = entitlementsByUserType[userType].maxChatApiCallsPerDay;
     console.log("apiCallCount => ", apiCallCount);
     // 如果超出限制，返回友好的中文提示
@@ -133,7 +132,6 @@ export async function POST(request: Request) {
       differenceInHours: 24,
     });
 
-    // @ts-expect-error
     if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
       return new ChatSDKError("rate_limit:chat").toResponse();
     }
@@ -171,7 +169,6 @@ export async function POST(request: Request) {
     // 构造新的消息对象，使用处理后的 parts
     const newMessage: ChatMessage = {
       ...message,
-      // @ts-expect-error
       parts: newParts,
     };
 
