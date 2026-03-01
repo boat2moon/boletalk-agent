@@ -384,7 +384,7 @@ function PureMultimodalInput({
             maxHeight={200}
             minHeight={44}
             onChange={handleInput}
-            placeholder="Send a message..."
+            placeholder="输入消息..."
             ref={textareaRef}
             rows={1}
             value={input}

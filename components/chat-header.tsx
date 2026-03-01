@@ -1,8 +1,8 @@
 "use client";
 
-import { BookIcon } from "lucide-react"; // 用于替换 VercelIcon
-import Link from "next/link";
+import { MoonIcon, SunIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { memo } from "react";
 import { useWindowSize } from "usehooks-ts";
 import { SidebarToggle } from "@/components/sidebar-toggle";
@@ -22,6 +22,7 @@ function PureChatHeader({
 }) {
   const router = useRouter();
   const { open } = useSidebar();
+  const { setTheme, resolvedTheme } = useTheme();
 
   const { width: windowWidth } = useWindowSize();
 
@@ -55,17 +56,15 @@ function PureChatHeader({
       )}
 
       <Button
-        asChild
-        className="order-3 hidden bg-zinc-900 px-2 text-zinc-50 hover:bg-zinc-800 md:ml-auto md:flex md:h-fit dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        className="order-3 hidden cursor-pointer md:ml-auto md:flex md:h-fit"
+        onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+        variant="outline"
       >
-        <Link
-          href={"https://www.huashuiai.com/pub/ai-agent-camp"}
-          rel="noreferrer"
-          target="_noblank"
-        >
-          <BookIcon size={16} />
-          学习该项目
-        </Link>
+        {resolvedTheme === "light" ? (
+          <MoonIcon size={16} />
+        ) : (
+          <SunIcon size={16} />
+        )}
       </Button>
     </header>
   );
