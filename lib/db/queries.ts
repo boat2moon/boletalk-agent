@@ -645,3 +645,29 @@ export async function getChatApiCallCountByUserId({
     );
   }
 }
+
+/**
+ * 获取 chat 表中第一条记录的 id
+ * 用于心跳监控接口，验证数据库连接是否正常
+ * 通过执行一次简单的 SELECT 查询来确认数据库连通性
+ *
+ * @returns 第一条 chat 记录的 id，如果表为空则返回 null
+ */
+export async function getFirstChatId(): Promise<string | null> {
+  try {
+    // 按创建时间升序，取第一条记录的 id
+    const [firstChat] = await db
+      .select({ id: chat.id })
+      .from(chat)
+      .orderBy(asc(chat.createdAt))
+      .limit(1);
+
+    // 如果表为空，firstChat 为 undefined，返回 null
+    return firstChat?.id ?? null;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get first chat id"
+    );
+  }
+}
