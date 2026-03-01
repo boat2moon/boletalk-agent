@@ -9,22 +9,18 @@ import {
   type Dispatch,
   memo,
   type SetStateAction,
-  startTransition,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
 import { toast } from "sonner";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
-import { saveChatModelAsCookie } from "@/app/(chat)/actions";
 import { SelectItem } from "@/components/ui/select";
 import { chatModels } from "@/lib/ai/models";
 import type { Attachment, ChatMessage } from "@/lib/types";
-import type { AppUsage } from "@/lib/usage";
 import { cn } from "@/lib/utils";
-import { Context } from "./elements/context";
+import { ApiCallUsage } from "./elements/api-call-usage";
 import {
   PromptInput,
   PromptInputModelSelect,
@@ -46,6 +42,25 @@ import { SuggestedActions } from "./suggested-actions";
 import { Button } from "./ui/button";
 import type { VisibilityType } from "./visibility-selector";
 
+// 将文件读取为 base64 字符串的工具函数
+// 使用 FileReader API 将文件转换为 Data URL，然后提取 base64 部分
+const readFileAsBase64 = (inputFile: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        // 移除 Data URL 前缀（例如 "data:application/pdf;base64,"），只保留纯 base64 字符串
+        const base64 = result.split(",")[1] ?? "";
+        resolve(base64);
+      } else {
+        reject(new Error("Failed to read file as base64 string."));
+      }
+    };
+    reader.onerror = () => reject(new Error("FileReader error"));
+    reader.readAsDataURL(inputFile); // 以 Data URL 形式读取文件
+  });
+
 function PureMultimodalInput({
   chatId,
   input,
@@ -61,7 +76,6 @@ function PureMultimodalInput({
   selectedVisibilityType,
   selectedModelId,
   onModelChange,
-  usage,
 }: {
   chatId: string;
   input: string;
@@ -77,7 +91,6 @@ function PureMultimodalInput({
   selectedVisibilityType: VisibilityType;
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
-  usage?: AppUsage;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
@@ -126,7 +139,7 @@ function PureMultimodalInput({
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadQueue, setUploadQueue] = useState<string[]>([]);
+  const [uploadQueue, _setUploadQueue] = useState<string[]>([]);
 
   const submitForm = useCallback(() => {
     window.history.pushState({}, "", `/chat/${chatId}`);
@@ -137,6 +150,7 @@ function PureMultimodalInput({
         ...attachments.map((attachment) => ({
           type: "file" as const,
           url: attachment.url,
+          base64: attachment.base64, // 将 base64 内容一并发送给服务端
           name: attachment.name,
           mediaType: attachment.contentType,
         })),
@@ -167,124 +181,133 @@ function PureMultimodalInput({
     resetHeight,
   ]);
 
-  const uploadFile = useCallback(async (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
+  // 文件上传到服务器的函数已被注释，改为前端直接读取 base64
+  // const uploadFile = useCallback(async (file: File) => {
+  //   const formData = new FormData();
+  //   formData.append("file", file);
+  //
+  //   try {
+  //     const response = await fetch("/api/files/upload", {
+  //       method: "POST",
+  //       body: formData,
+  //     });
+  //
+  //     if (response.ok) {
+  //       const data = await response.json();
+  //       const { url, pathname, contentType } = data;
+  //
+  //       return {
+  //         url,
+  //         name: pathname,
+  //         contentType,
+  //       };
+  //     }
+  //     const { error } = await response.json();
+  //     toast.error(error);
+  //   } catch (_error) {
+  //     toast.error("Failed to upload file, please try again!");
+  //   }
+  // }, []);
 
-    try {
-      const response = await fetch("/api/files/upload", {
-        method: "POST",
-        body: formData,
-      });
+  // 使用消息数量作为刷新 key，每发送/收到消息后刷新使用次数
+  const refreshKey = messages.length;
 
-      if (response.ok) {
-        const data = await response.json();
-        const { url, pathname, contentType } = data;
-
-        return {
-          url,
-          name: pathname,
-          contentType,
-        };
-      }
-      const { error } = await response.json();
-      toast.error(error);
-    } catch (_error) {
-      toast.error("Failed to upload file, please try again!");
-    }
-  }, []);
-
-  const contextProps = useMemo(
-    () => ({
-      usage,
-    }),
-    [usage]
-  );
-
+  // 文件选择处理函数：改为直接读取文件的 base64 内容，不再上传到服务器
   const handleFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.target.files || []);
+      const file = files[0]; // 只取第一个文件（不支持多选）
 
-      setUploadQueue(files.map((file) => file.name));
-
-      try {
-        const uploadPromises = files.map((file) => uploadFile(file));
-        const uploadedAttachments = await Promise.all(uploadPromises);
-        const successfullyUploadedAttachments = uploadedAttachments.filter(
-          (attachment) => attachment !== undefined
-        );
-
-        setAttachments((currentAttachments) => [
-          ...currentAttachments,
-          ...successfullyUploadedAttachments,
-        ]);
-      } catch (error) {
-        console.error("Error uploading files!", error);
-      } finally {
-        setUploadQueue([]);
-      }
-    },
-    [setAttachments, uploadFile]
-  );
-
-  const handlePaste = useCallback(
-    async (event: ClipboardEvent) => {
-      const items = event.clipboardData?.items;
-      if (!items) {
+      if (!file) {
         return;
       }
 
-      const imageItems = Array.from(items).filter((item) =>
-        item.type.startsWith("image/")
-      );
-
-      if (imageItems.length === 0) {
+      // 先检查文件类型：只允许 PDF
+      if (file.type !== "application/pdf") {
+        toast.error("仅支持 PDF 格式的文件");
         return;
       }
 
-      // Prevent default paste behavior for images
-      event.preventDefault();
-
-      setUploadQueue((prev) => [...prev, "Pasted image"]);
-
-      try {
-        const uploadPromises = imageItems
-          .map((item) => item.getAsFile())
-          .filter((file): file is File => file !== null)
-          .map((file) => uploadFile(file));
-
-        const uploadedAttachments = await Promise.all(uploadPromises);
-        const successfullyUploadedAttachments = uploadedAttachments.filter(
-          (attachment) =>
-            attachment !== undefined &&
-            attachment.url !== undefined &&
-            attachment.contentType !== undefined
-        );
-
-        setAttachments((curr) => [
-          ...curr,
-          ...(successfullyUploadedAttachments as Attachment[]),
-        ]);
-      } catch (error) {
-        console.error("Error uploading pasted images:", error);
-        toast.error("Failed to upload pasted image(s)");
-      } finally {
-        setUploadQueue([]);
+      // 再检查文件大小：限制 5MB
+      const MAX_FILE_SIZE = 5 * 1024 * 1024;
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error("文件过大，请上传 5MB 以内的 PDF 文件");
+        return;
       }
+
+      // 直接读取文件为 base64 字符串，不经过服务器上传
+      const base64 = await readFileAsBase64(file);
+      setAttachments([
+        {
+          name: file.name,
+          url: "", // 不再有服务器 URL，设为空字符串
+          base64, // 存储 base64 编码内容
+          contentType: file.type,
+        },
+      ]);
     },
-    [setAttachments, uploadFile]
+    [setAttachments]
   );
 
-  // Add paste event listener to textarea
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      return;
-    }
+  // 图片粘贴功能已注释，当前不需要
+  // const handlePaste = useCallback(
+  //   async (event: ClipboardEvent) => {
+  //     const items = event.clipboardData?.items;
+  //     if (!items) {
+  //       return;
+  //     }
+  //
+  //     const imageItems = Array.from(items).filter((item) =>
+  //       item.type.startsWith("image/")
+  //     );
+  //
+  //     if (imageItems.length === 0) {
+  //       return;
+  //     }
+  //
+  //     // Prevent default paste behavior for images
+  //     event.preventDefault();
+  //
+  //     setUploadQueue((prev) => [...prev, "Pasted image"]);
+  //
+  //     try {
+  //       const uploadPromises = imageItems
+  //         .map((item) => item.getAsFile())
+  //         .filter((file): file is File => file !== null)
+  //         .map((file) => uploadFile(file));
+  //
+  //       const uploadedAttachments = await Promise.all(uploadPromises);
+  //       const successfullyUploadedAttachments = uploadedAttachments.filter(
+  //         (attachment) =>
+  //           attachment !== undefined &&
+  //           attachment.url !== undefined &&
+  //           attachment.contentType !== undefined
+  //       );
+  //
+  //       setAttachments((curr) => [
+  //         ...curr,
+  //         ...(successfullyUploadedAttachments as Attachment[]),
+  //       ]);
+  //     } catch (error) {
+  //       console.error("Error uploading pasted images:", error);
+  //       toast.error("Failed to upload pasted image(s)");
+  //     } finally {
+  //       setUploadQueue([]);
+  //     }
+  //   },
+  //   [setAttachments, uploadFile]
+  // );
 
-    textarea.addEventListener("paste", handlePaste);
-    return () => textarea.removeEventListener("paste", handlePaste);
-  }, [handlePaste]);
+  // // 粘贴事件监听也一并注释
+  // useEffect(() => {
+  //   const textarea = textareaRef.current;
+  //   if (!textarea) {
+  //     return;
+  //   }
+  //
+  //   textarea.addEventListener("paste", handlePaste);
+  //   return () => textarea.removeEventListener("paste", handlePaste);
+  // }, [handlePaste]);
 
   return (
     <div className={cn("relative flex w-full flex-col gap-4", className)}>
@@ -299,8 +322,9 @@ function PureMultimodalInput({
         )}
 
       <input
+        accept="application/pdf"
         className="-top-4 -left-4 pointer-events-none fixed size-0.5 opacity-0"
-        multiple
+        // multiple  // 不允许多选文件，只能选择单个 PDF
         onChange={handleFileChange}
         ref={fileInputRef}
         tabIndex={-1}
@@ -365,10 +389,11 @@ function PureMultimodalInput({
             rows={1}
             value={input}
           />{" "}
-          <Context {...contextProps} />
+          <ApiCallUsage refreshKey={refreshKey} />
         </div>
         <PromptInputToolbar className="!border-top-0 border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           <PromptInputTools className="gap-0 sm:gap-0.5">
+            {/* PDF 附件上传按钮 */}
             <AttachmentsButton
               fileInputRef={fileInputRef}
               selectedModelId={selectedModelId}
@@ -430,13 +455,13 @@ function PureAttachmentsButton({
   status: UseChatHelpers<ChatMessage>["status"];
   selectedModelId: string;
 }) {
-  const isReasoningModel = selectedModelId === "chat-model-reasoning";
+  const _isReasoningModel = selectedModelId === "chat-model-reasoning";
 
   return (
     <Button
       className="aspect-square h-8 rounded-lg p-1 transition-colors hover:bg-accent"
       data-testid="attachments-button"
-      disabled={status !== "ready" || isReasoningModel}
+      disabled={status !== "ready"}
       onClick={(event) => {
         event.preventDefault();
         fileInputRef.current?.click();
@@ -474,9 +499,9 @@ function PureModelSelectorCompact({
         if (model) {
           setOptimisticModelId(model.id);
           onModelChange?.(model.id);
-          startTransition(() => {
-            saveChatModelAsCookie(model.id);
-          });
+          // 使用客户端 cookie 操作替代 Server Action
+          // Server Action 会触发页面 revalidation，导致 attachments 等状态丢失
+          document.cookie = `chat-model=${model.id}; path=/; max-age=${60 * 60 * 24 * 365}`;
         }
       }}
       value={selectedModel?.name}

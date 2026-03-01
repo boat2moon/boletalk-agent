@@ -71,7 +71,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 }}
               >
                 <span className="cursor-pointer rounded-md px-2 font-semibold text-lg hover:bg-muted">
-                  Chatbot
+                  伯乐Talk
                 </span>
               </Link>
               <div className="flex flex-row gap-1">
@@ -98,6 +98,8 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       className="h-8 p-1 md:h-fit md:p-2"
                       onClick={() => {
                         setOpenMobile(false);
+                        // 新建聊天时重置模型为默认的 GLM
+                        document.cookie = `chat-model=chat-model-glm; path=/; max-age=${60 * 60 * 24 * 365}`;
                         router.push("/");
                         router.refresh();
                       }}

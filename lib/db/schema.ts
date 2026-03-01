@@ -171,3 +171,19 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+/**
+ * API 调用记录表
+ *
+ * 记录每个用户的每次 API 调用，用于实现每日调用次数限制。
+ * 通过统计 24 小时内的记录数来判断是否超限。
+ */
+export const chatApiCall = pgTable("ChatApiCall", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id),
+  createdAt: timestamp("createdAt").notNull(),
+});
+
+export type ChatApiCall = InferSelectModel<typeof chatApiCall>;

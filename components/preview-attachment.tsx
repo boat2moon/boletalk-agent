@@ -28,6 +28,37 @@ export const PreviewAttachment = ({
           src={url}
           width={64}
         />
+      ) : contentType?.includes("pdf") ? (
+        /* PDF 文件预览：显示一个自定义 SVG 图标 */
+        <div
+          aria-label="PDF attachment"
+          className="flex items-center justify-center text-muted-foreground text-xs"
+          style={{ width: 52, height: 52 }}
+        >
+          {/* PDF 图标 SVG */}
+          <svg
+            aria-hidden="true"
+            fill="none"
+            focusable="false"
+            height={52}
+            role="img"
+            viewBox="0 0 24 24"
+            width={52}
+          >
+            <title>PDF file</title>
+            <rect fill="#E2E2E2" height="18" rx="2" width="18" x="3" y="3" />
+            <path
+              d="M7.5 17V7H12c2.5 0 5.5.5 5.5 5s-3 5-5.5 5H7.5Zm3-8v6M7.5 11h8"
+              stroke="#B91C1C"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.5"
+            />
+            <text fill="#B91C1C" fontSize="6" textAnchor="middle" x="12" y="18">
+              PDF
+            </text>
+          </svg>
+        </div>
       ) : (
         <div className="flex size-full items-center justify-center text-muted-foreground text-xs">
           File
