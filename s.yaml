@@ -25,6 +25,12 @@ resources:
         - run: echo "DEEPSEEK_API_KEY=${env(DEEPSEEK_API_KEY)}" >> .env.local
         - run: echo "ZHIPU_API_KEY=${env(ZHIPU_API_KEY)}" >> .env.local
         - run: echo "AUTH_SECRET=${env(AUTH_SECRET)}" >> .env.local
+        - run: echo "AUTH_GITHUB_ID=${env(AUTH_GITHUB_ID)}" >> .env.local
+        - run: echo "AUTH_GITHUB_SECRET=${env(AUTH_GITHUB_SECRET)}" >> .env.local
+        - run: echo "EMAIL_HOST=${env(EMAIL_HOST)}" >> .env.local
+        - run: echo "EMAIL_PORT=${env(EMAIL_PORT)}" >> .env.local
+        - run: echo "EMAIL_PASSWORD=${env(EMAIL_PASSWORD)}" >> .env.local
+        - run: echo "EMAIL_FROM=${env(EMAIL_FROM)}" >> .env.local
         # -------------------------------------------------------------------------
         # 构建 Next.js standalone 产物
         # -------------------------------------------------------------------------
@@ -51,6 +57,12 @@ resources:
         DEEPSEEK_API_KEY: ${env(DEEPSEEK_API_KEY)}
         ZHIPU_API_KEY: ${env(ZHIPU_API_KEY)}
         AUTH_SECRET: ${env(AUTH_SECRET)}
+        AUTH_GITHUB_ID: ${env(AUTH_GITHUB_ID)}
+        AUTH_GITHUB_SECRET: ${env(AUTH_GITHUB_SECRET)}
+        EMAIL_HOST: ${env(EMAIL_HOST)}
+        EMAIL_PORT: ${env(EMAIL_PORT)}
+        EMAIL_PASSWORD: ${env(EMAIL_PASSWORD)}
+        EMAIL_FROM: ${env(EMAIL_FROM)}
       customRuntimeConfig:
         command:
           - node
