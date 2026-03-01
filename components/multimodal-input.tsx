@@ -391,7 +391,7 @@ function PureMultimodalInput({
           />{" "}
           <ApiCallUsage refreshKey={refreshKey} />
         </div>
-        <PromptInputToolbar className="!border-top-0 border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
+        <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           <PromptInputTools className="gap-0 sm:gap-0.5">
             {/* PDF 附件上传按钮 */}
             <AttachmentsButton
