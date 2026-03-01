@@ -35,7 +35,7 @@ export function SidebarUserNav({ user }: { user: User }) {
   const { data, status } = useSession();
   const [showGuestLogoutDialog, setShowGuestLogoutDialog] = useState(false);
 
-  const isGuest = guestRegex.test(data?.user?.email ?? "");
+  const isGuest = guestRegex.test(data?.user?.email ?? user?.email ?? "");
 
   return (
     <SidebarMenu>
