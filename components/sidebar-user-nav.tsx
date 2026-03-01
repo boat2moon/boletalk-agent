@@ -38,7 +38,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                 <div className="flex flex-row gap-2">
                   <div className="size-6 animate-pulse rounded-full bg-zinc-500/30" />
                   <span className="animate-pulse rounded-md bg-zinc-500/30 text-transparent">
-                    Loading auth status
+                    加载中
                   </span>
                 </div>
                 <div className="animate-spin text-zinc-500">
@@ -57,7 +57,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                   src={`https://api.dicebear.com/9.x/fun-emoji/svg?seed=${user.email}`}
                 />
                 <span className="truncate" data-testid="user-email">
-                  {isGuest ? "Guest" : user?.email}
+                  {isGuest ? "访客" : user?.email}
                 </span>
                 <ChevronUp className="ml-auto" />
               </SidebarMenuButton>
@@ -75,7 +75,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                 setTheme(resolvedTheme === "dark" ? "light" : "dark")
               }
             >
-              {`Toggle ${resolvedTheme === "light" ? "dark" : "light"} mode`}
+              {resolvedTheme === "light" ? "切换深色模式" : "切换浅色模式"}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild data-testid="user-nav-item-auth">
@@ -85,8 +85,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                   if (status === "loading") {
                     toast({
                       type: "error",
-                      description:
-                        "Checking authentication status, please try again!",
+                      description: "正在检查登录状态，请稍后重试！",
                     });
 
                     return;
@@ -102,7 +101,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                 }}
                 type="button"
               >
-                {isGuest ? "Login to your account" : "Sign out"}
+                {isGuest ? "登录账户" : "退出登录"}
               </button>
             </DropdownMenuItem>
           </DropdownMenuContent>

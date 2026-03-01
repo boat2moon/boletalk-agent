@@ -9,6 +9,7 @@ import {
   gt,
   gte,
   inArray,
+  like,
   lt,
   type SQL,
 } from "drizzle-orm";
@@ -78,6 +79,38 @@ export async function createGuestUser() {
       "bad_request:database",
       "Failed to create guest user"
     );
+  }
+}
+
+/**
+ * 懒清理过期访客用户
+ *
+ * 删除超过 7 天前创建的 guest 用户。
+ * 由于数据库设置了 ON DELETE CASCADE，删除 User 会自动
+ * 级联删除其相关的 Chat、Message、Vote、Document 等数据。
+ *
+ * proxy.ts 会在 7 天后强制清除访客的 session，
+ * 所以被清理的 guest 用户不会还有活跃 session。
+ *
+ * 在 Serverless 环境下，每次新建访客或正式登录时 fire-and-forget 调用此函数。
+ */
+export async function cleanupExpiredGuests() {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  try {
+    // guest 用户 email 格式为 guest-{timestamp}，
+    // 从 email 中提取时间戳来判断创建时间
+    await db
+      .delete(user)
+      .where(
+        and(
+          like(user.email, "guest-%"),
+          lt(user.email, `guest-${sevenDaysAgo.getTime()}`)
+        )
+      );
+  } catch (_error) {
+    // 清理失败不影响主流程，静默忽略
+    console.error("Failed to cleanup expired guests:", _error);
   }
 }
 

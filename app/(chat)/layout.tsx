@@ -3,6 +3,7 @@ import Script from "next/script";
 import { Suspense } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DataStreamProvider } from "@/components/data-stream-provider";
+import { GuestExpiredToast } from "@/components/guest-expired-toast";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { auth } from "../(auth)/auth";
 
@@ -20,6 +21,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <SidebarWrapper>{children}</SidebarWrapper>
         </Suspense>
       </DataStreamProvider>
+      <Suspense>
+        <GuestExpiredToast />
+      </Suspense>
     </>
   );
 }
