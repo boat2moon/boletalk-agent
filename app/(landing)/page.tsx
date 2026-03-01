@@ -84,7 +84,7 @@ export default function HomePage() {
           </h1>
 
           <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground md:text-xl">
-            专注编程领域，尤其前端开发。提供简历优化、模拟面试、面试题解答等全方位面试辅导服务
+            专注编程领域，提供简历优化、模拟面试、面试题解答等全方位面试辅导服务
           </p>
 
           <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
@@ -107,7 +107,7 @@ export default function HomePage() {
                 <UserPlus className="ml-2 size-4" />
               </Button>
             </Link>
-            <Link href="mailto:boletalk@example.com" target="_blank">
+            <Link href="https://boat2moon.com" target="_blank">
               <Button
                 className="w-full cursor-pointer bg-transparent sm:w-auto"
                 size="lg"
@@ -213,7 +213,7 @@ export default function HomePage() {
                 <UserPlus className="ml-2 size-4" />
               </Button>
             </Link>
-            <Link href="mailto:boletalk@example.com" target="_blank">
+            <Link href="https://boat2moon.com" target="_blank">
               <Button
                 className="w-full cursor-pointer bg-transparent sm:w-auto"
                 size="lg"
