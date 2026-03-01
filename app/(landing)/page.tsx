@@ -1,19 +1,19 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { SiGithub } from "@icons-pack/react-simple-icons";
 import {
-  FileText,
-  MessageSquare,
-  Code,
-  Sparkles,
   ArrowRight,
   CheckCircle2,
-  UserPlus,
+  Code,
+  FileText,
   Mail,
+  MessageSquare,
+  Sparkles,
+  UserPlus,
 } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
+import Link from "next/link";
 import { DemoSection } from "@/components/demo-section";
 import { ScrollToTopLink } from "@/components/scroll-to-top-link";
-import { SiGithub } from "@icons-pack/react-simple-icons";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   const features = [
@@ -44,23 +44,21 @@ export default function HomePage() {
     "即时反馈建议",
   ];
 
-
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header - 固定顶部 + 毛玻璃 */}
-      <header className="glass-header fixed top-0 left-0 right-0 z-50">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+      <header className="glass-header fixed top-0 right-0 left-0 z-50">
+        <div className="container mx-auto flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <ScrollToTopLink />
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            <Button variant="ghost" size="icon" asChild>
+            <Button asChild size="icon" variant="ghost">
               <a
                 href="https://github.com/boat2moon/boletalk-agent"
-                target="_blank"
                 rel="noopener noreferrer"
+                target="_blank"
               >
                 <SiGithub className="size-5" />
               </a>
@@ -74,26 +72,26 @@ export default function HomePage() {
 
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-16 md:py-24">
-        <div className="max-w-4xl mx-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent text-accent-foreground text-sm border border-border">
+        <div className="mx-auto max-w-4xl space-y-6 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-accent px-3 py-1 text-accent-foreground text-sm">
             <Sparkles className="size-4" />
             <span>由 AI 驱动的智能面试助手</span>
           </div>
 
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-balance">
+          <h1 className="text-balance font-bold text-4xl tracking-tight md:text-6xl">
             你的专属
             <span className="text-blue-600"> AI Agent</span> 面试官
           </h1>
 
-          <p className="text-lg md:text-xl text-muted-foreground text-balance max-w-2xl mx-auto">
+          <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground md:text-xl">
             专注编程领域，尤其前端开发。提供简历优化、模拟面试、面试题解答等全方位面试辅导服务
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+          <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
             <Link href="/login">
               <Button
+                className="w-full cursor-pointer bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
                 size="lg"
-                className="w-full sm:w-auto cursor-pointer bg-blue-600 text-white hover:bg-blue-700"
               >
                 登录 / 注册
                 <ArrowRight className="ml-2 size-4" />
@@ -101,22 +99,19 @@ export default function HomePage() {
             </Link>
             <Link href="/api/auth/guest?redirectUrl=/chat">
               <Button
+                className="w-full cursor-pointer bg-transparent sm:w-auto"
                 size="lg"
                 variant="outline"
-                className="w-full sm:w-auto bg-transparent cursor-pointer"
               >
                 访客登录
                 <UserPlus className="ml-2 size-4" />
               </Button>
             </Link>
-            <Link
-              href="mailto:boletalk@example.com"
-              target="_blank"
-            >
+            <Link href="mailto:boletalk@example.com" target="_blank">
               <Button
+                className="w-full cursor-pointer bg-transparent sm:w-auto"
                 size="lg"
                 variant="outline"
-                className="w-full sm:w-auto bg-transparent cursor-pointer"
               >
                 联系开发者
                 <Mail className="ml-2 size-4" />
@@ -125,11 +120,11 @@ export default function HomePage() {
           </div>
 
           {/* Highlights */}
-          <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 pt-8">
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-8 md:gap-6">
             {highlights.map((item) => (
               <div
+                className="flex items-center gap-2 text-muted-foreground text-sm"
                 key={item}
-                className="flex items-center gap-2 text-sm text-muted-foreground"
               >
                 <CheckCircle2 className="size-4 text-primary" />
                 <span>{item}</span>
@@ -141,30 +136,30 @@ export default function HomePage() {
 
       {/* Features Section - 毛玻璃卡片 */}
       <section className="container mx-auto px-4 py-16 md:py-24">
-        <div className="text-center space-y-4 mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-balance">
+        <div className="mb-12 space-y-4 text-center">
+          <h2 className="text-balance font-bold text-3xl md:text-4xl">
             核心功能
           </h2>
-          <p className="text-lg text-muted-foreground text-balance max-w-2xl mx-auto">
+          <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground">
             全方位的面试准备解决方案
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-3">
           {features.map((feature) => {
             const Icon = feature.icon;
             return (
               <div
+                className="glass-card glass-card-interactive space-y-4 rounded-xl p-6"
                 key={feature.title}
-                className="glass-card glass-card-interactive p-6 rounded-xl space-y-4"
               >
                 <div
-                  className={`size-12 rounded-lg flex items-center justify-center ${feature.color}`}
+                  className={`flex size-12 items-center justify-center rounded-lg ${feature.color}`}
                 >
                   <Icon className="size-6" />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-xl font-semibold">{feature.title}</h3>
+                  <h3 className="font-semibold text-xl">{feature.title}</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     {feature.description}
                   </p>
@@ -176,12 +171,12 @@ export default function HomePage() {
       </section>
 
       {/* Demo Section - GIF 展示区域 */}
-      <section className="container mx-auto px-4 py-16 md:py-24 bg-muted/30">
-        <div className="text-center space-y-4 mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-balance">
+      <section className="container mx-auto bg-muted/30 px-4 py-16 md:py-24">
+        <div className="mb-12 space-y-4 text-center">
+          <h2 className="text-balance font-bold text-3xl md:text-4xl">
             功能演示
           </h2>
-          <p className="text-lg text-muted-foreground text-balance max-w-2xl mx-auto">
+          <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground">
             看看 AI 面试官如何帮助你准备面试
           </p>
         </div>
@@ -191,16 +186,20 @@ export default function HomePage() {
 
       {/* CTA Section - 反转毛玻璃 */}
       <section className="container mx-auto px-4 py-16 md:py-24">
-        <div className="glass-card-inverted max-w-4xl mx-auto p-8 md:p-12 text-center space-y-6 rounded-2xl">
-          <h2 className="text-3xl md:text-4xl font-bold text-balance">
+        <div className="glass-card-inverted mx-auto max-w-4xl space-y-6 rounded-2xl p-8 text-center md:p-12">
+          <h2 className="text-balance font-bold text-3xl md:text-4xl">
             准备好开始你的面试准备了吗？
           </h2>
-          <p className="text-lg opacity-80 text-balance max-w-2xl mx-auto">
+          <p className="mx-auto max-w-2xl text-balance text-lg opacity-80">
             立即与 AI 面试官对话，获取专业的面试指导和建议
           </p>
           <div className="pt-4">
             <Link href="/api/auth/guest?redirectUrl=/chat">
-              <Button size="lg" variant="secondary" className="w-full sm:w-auto">
+              <Button
+                className="w-full sm:w-auto"
+                size="lg"
+                variant="secondary"
+              >
                 开始对话
                 <ArrowRight className="ml-2 size-4" />
               </Button>
@@ -210,23 +209,23 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border">
+      <footer className="border-border border-t">
         <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <div className="flex items-center gap-2">
-              <div className="size-6 rounded bg-primary flex items-center justify-center">
+              <div className="flex size-6 items-center justify-center rounded bg-primary">
                 <Sparkles className="size-4 text-primary-foreground" />
               </div>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-muted-foreground text-sm">
                 © {new Date().getFullYear()} 伯乐Talk
               </span>
             </div>
-            <div className="text-sm text-muted-foreground">
+            <div className="text-muted-foreground text-sm">
               友情项目：
               <Link
+                className="underline underline-offset-4 transition-colors hover:text-foreground"
                 href="https://rumuai.top"
                 target="_blank"
-                className="hover:text-foreground transition-colors underline underline-offset-4"
               >
                 入木AI（rumuai.top）
               </Link>

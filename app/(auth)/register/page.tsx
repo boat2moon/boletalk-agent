@@ -1,15 +1,15 @@
 "use client";
 
+import { SiGithub } from "@icons-pack/react-simple-icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSession, signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useActionState, useEffect, useState } from "react";
-import { SiGithub } from "@icons-pack/react-simple-icons";
 
 import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
-import { Button } from "@/components/ui/button";
 import { toast } from "@/components/toast";
+import { Button } from "@/components/ui/button";
 import { type RegisterActionState, register } from "../actions";
 
 export default function Page() {
@@ -69,9 +69,9 @@ export default function Page() {
         {/* GitHub 注册 */}
         <div className="flex flex-col gap-3 px-4 sm:px-16">
           <Button
-            variant="outline"
             className="w-full gap-2"
             onClick={handleGitHubLogin}
+            variant="outline"
           >
             <SiGithub className="size-4" />
             使用 GitHub 注册
@@ -81,7 +81,7 @@ export default function Page() {
         {/* 分割线 */}
         <div className="flex items-center gap-3 px-4 sm:px-16">
           <div className="h-px flex-1 bg-border" />
-          <span className="text-xs text-muted-foreground">或使用邮箱密码</span>
+          <span className="text-muted-foreground text-xs">或使用邮箱密码</span>
           <div className="h-px flex-1 bg-border" />
         </div>
 

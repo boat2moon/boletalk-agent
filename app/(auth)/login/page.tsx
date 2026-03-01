@@ -1,18 +1,18 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useSession, signIn } from "next-auth/react";
-import { useActionState, useEffect, useState } from "react";
 import { SiGithub } from "@icons-pack/react-simple-icons";
 import { Mail } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { signIn, useSession } from "next-auth/react";
+import { useActionState, useEffect, useState } from "react";
 
 import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
+import { toast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "@/components/toast";
 import { type LoginActionState, login } from "../actions";
 
 export default function Page() {
@@ -93,47 +93,47 @@ export default function Page() {
         {/* GitHub 登录 */}
         <div className="flex flex-col gap-3 px-4 sm:px-16">
           <Button
-            variant="outline"
             className="w-full gap-2"
             onClick={handleGitHubLogin}
+            variant="outline"
           >
             <SiGithub className="size-4" />
             GitHub 登录
           </Button>
 
           {/* Magic Link 邮箱登录 */}
-          {!showMagicLink ? (
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={() => setShowMagicLink(true)}
-            >
-              <Mail className="size-4" />
-              邮箱免密登录
-            </Button>
-          ) : (
+          {showMagicLink ? (
             <div className="flex flex-col gap-2 rounded-lg border p-3">
               <Label className="text-sm text-zinc-600 dark:text-zinc-400">
                 输入邮箱，接收登录链接
               </Label>
               <Input
-                type="email"
-                placeholder="your@email.com"
-                value={magicLinkEmail}
-                onChange={(e) => setMagicLinkEmail(e.target.value)}
                 className="bg-muted text-md md:text-sm"
+                onChange={(e) => setMagicLinkEmail(e.target.value)}
+                placeholder="your@email.com"
+                type="email"
+                value={magicLinkEmail}
               />
-              <Button onClick={handleMagicLink} className="w-full">
+              <Button className="w-full" onClick={handleMagicLink}>
                 发送登录链接
               </Button>
             </div>
+          ) : (
+            <Button
+              className="w-full gap-2"
+              onClick={() => setShowMagicLink(true)}
+              variant="outline"
+            >
+              <Mail className="size-4" />
+              邮箱免密登录
+            </Button>
           )}
         </div>
 
         {/* 分割线 */}
         <div className="flex items-center gap-3 px-4 sm:px-16">
           <div className="h-px flex-1 bg-border" />
-          <span className="text-xs text-muted-foreground">或使用邮箱密码</span>
+          <span className="text-muted-foreground text-xs">或使用邮箱密码</span>
           <div className="h-px flex-1 bg-border" />
         </div>
 

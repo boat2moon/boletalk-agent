@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   }
 
   // 懒清理：每次新建访客时，fire-and-forget 清除过期的旧访客数据
+  // biome-ignore lint/suspicious/noEmptyBlockStatements: intentional fire-and-forget
   cleanupExpiredGuests().catch(() => {});
 
   return signIn("guest", { redirect: true, redirectTo: redirectUrl });

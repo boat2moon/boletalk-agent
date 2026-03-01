@@ -1,19 +1,22 @@
-
+import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { compare } from "bcrypt-ts";
+import { drizzle } from "drizzle-orm/postgres-js";
 import NextAuth, { type DefaultSession } from "next-auth";
 import type { DefaultJWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 import Email from "next-auth/providers/nodemailer";
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { drizzle } from "drizzle-orm/postgres-js";
 
 import postgres from "postgres";
 import { DUMMY_PASSWORD } from "@/lib/constants";
-import { cleanupExpiredGuests, createGuestUser, getUser } from "@/lib/db/queries";
 import {
-  user as userTable,
+  cleanupExpiredGuests,
+  createGuestUser,
+  getUser,
+} from "@/lib/db/queries";
+import {
   account as accountTable,
+  user as userTable,
   verificationToken as verificationTokenTable,
 } from "@/lib/db/schema";
 import { authConfig } from "./auth.config";
@@ -127,6 +130,7 @@ export const {
   callbacks: {
     signIn() {
       // 每次登录（访客/正式）都触发懒清理，fire-and-forget
+      // biome-ignore lint/suspicious/noEmptyBlockStatements: intentional fire-and-forget
       cleanupExpiredGuests().catch(() => {});
       return true;
     },
