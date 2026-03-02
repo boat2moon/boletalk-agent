@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { ChatHeader } from "@/components/chat-header";
@@ -126,6 +126,43 @@ export function Chat({
   // 标记是否已将新建会话乐观插入侧边栏
   const hasMutatedSidebar = useRef(initialMessages.length > 0);
 
+  /**
+   * 立即在侧边栏插入一条骨架占位（空标题），
+   * 在 data-chat-title 到达前就让用户看到 loading 态。
+   */
+  const insertSkeletonToSidebar = useCallback(() => {
+    if (hasMutatedSidebar.current) {
+      return;
+    }
+    hasMutatedSidebar.current = true;
+    const skeletonChat = {
+      id,
+      title: "", // 空标题 → sidebar 渲染为骨架
+      createdAt: new Date(),
+      userId: "",
+      visibility: initialVisibilityType,
+      chatType: voiceModeRef.current === "voice" ? "voice" : "text",
+      lastContext: null,
+    };
+    const key = unstable_serialize(getChatHistoryPaginationKey);
+    mutate(
+      key,
+      (currentData: ChatHistory[] | undefined) => {
+        if (!currentData || currentData.length === 0) {
+          return [{ chats: [skeletonChat], hasMore: false }] as ChatHistory[];
+        }
+        return [
+          {
+            ...currentData[0],
+            chats: [skeletonChat, ...currentData[0].chats],
+          },
+          ...currentData.slice(1),
+        ] as ChatHistory[];
+      },
+      { revalidate: false }
+    );
+  }, [id, initialVisibilityType, mutate]);
+
   const {
     messages,
     setMessages,
@@ -159,36 +196,58 @@ export function Chat({
       setDataStream((ds) => (ds ? [...ds, dataPart] : []));
       // 收到服务端推送的 AI 生成标题时，乐观插入侧边栏
       const part = dataPart as { type: string; data?: unknown };
-      if (part.type === "data-chat-title" && !hasMutatedSidebar.current) {
-        hasMutatedSidebar.current = true;
-        const optimisticChat = {
-          id,
-          title: part.data as string,
-          createdAt: new Date(),
-          userId: "",
-          visibility: initialVisibilityType,
-          chatType: voiceModeRef.current === "voice" ? "voice" : "text",
-          lastContext: null,
-        };
+      if (part.type === "data-chat-title") {
+        // AI 生成的标题到达 → 更新已有骨架占位的标题
+        const title = part.data as string;
         const key = unstable_serialize(getChatHistoryPaginationKey);
-        mutate(
-          key,
-          (currentData: ChatHistory[] | undefined) => {
-            if (!currentData || currentData.length === 0) {
+        if (hasMutatedSidebar.current) {
+          // 骨架已插入，只更新 title
+          mutate(
+            key,
+            (currentData: ChatHistory[] | undefined) => {
+              if (!currentData) {
+                return currentData;
+              }
+              return currentData.map((page) => ({
+                ...page,
+                chats: page.chats.map((chat) =>
+                  chat.id === id ? { ...chat, title } : chat
+                ),
+              })) as ChatHistory[];
+            },
+            { revalidate: false }
+          );
+        } else {
+          // 以防万一骨架未插入（不应发生），直接插入带标题的
+          hasMutatedSidebar.current = true;
+          const optimisticChat = {
+            id,
+            title,
+            createdAt: new Date(),
+            userId: "",
+            visibility: initialVisibilityType,
+            chatType: voiceModeRef.current === "voice" ? "voice" : "text",
+            lastContext: null,
+          };
+          mutate(
+            key,
+            (currentData: ChatHistory[] | undefined) => {
+              if (!currentData || currentData.length === 0) {
+                return [
+                  { chats: [optimisticChat], hasMore: false },
+                ] as ChatHistory[];
+              }
               return [
-                { chats: [optimisticChat], hasMore: false },
+                {
+                  ...currentData[0],
+                  chats: [optimisticChat, ...currentData[0].chats],
+                },
+                ...currentData.slice(1),
               ] as ChatHistory[];
-            }
-            return [
-              {
-                ...currentData[0],
-                chats: [optimisticChat, ...currentData[0].chats],
-              },
-              ...currentData.slice(1),
-            ] as ChatHistory[];
-          },
-          { revalidate: false }
-        );
+            },
+            { revalidate: false }
+          );
+        }
       }
       if (dataPart.type === "data-usage") {
         setUsage(dataPart.data);
@@ -230,6 +289,17 @@ export function Chat({
     },
   });
 
+  /**
+   * 包装 sendMessage：首次发送消息时先在侧边栏插入骨架占位
+   */
+  const wrappedSendMessage: typeof sendMessage = useCallback(
+    (...args: Parameters<typeof sendMessage>) => {
+      insertSkeletonToSidebar();
+      return sendMessage(...args);
+    },
+    [sendMessage, insertSkeletonToSidebar]
+  );
+
   // 同步 messagesRef 以便 onData 中能获取最新消息
   useEffect(() => {
     messagesRef.current = messages;
@@ -247,7 +317,7 @@ export function Chat({
 
   useEffect(() => {
     if (query && !hasAppendedQuery) {
-      sendMessage({
+      wrappedSendMessage({
         role: "user" as const,
         parts: [{ type: "text", text: query }],
       });
@@ -255,7 +325,7 @@ export function Chat({
       setHasAppendedQuery(true);
       window.history.replaceState({}, "", `/chat/${id}`);
     }
-  }, [query, sendMessage, hasAppendedQuery, id]);
+  }, [query, wrappedSendMessage, hasAppendedQuery, id]);
 
   const { data: votes } = useSWR<Vote[]>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
@@ -306,7 +376,7 @@ export function Chat({
               onModelChange={setCurrentModelId}
               selectedModelId={currentModelId}
               selectedVisibilityType={visibilityType}
-              sendMessage={sendMessage}
+              sendMessage={wrappedSendMessage}
               setAttachments={setAttachments}
               setInput={setInput}
               setMessages={setMessages}
@@ -326,7 +396,7 @@ export function Chat({
         regenerate={regenerate}
         selectedModelId={currentModelId}
         selectedVisibilityType={visibilityType}
-        sendMessage={sendMessage}
+        sendMessage={wrappedSendMessage}
         setAttachments={setAttachments}
         setInput={setInput}
         setMessages={setMessages}

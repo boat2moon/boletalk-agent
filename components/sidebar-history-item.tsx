@@ -83,77 +83,96 @@ const PureChatItem = ({
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={isActive}>
-        <Link href={`/chat/${chat.id}`} onClick={() => setOpenMobile(false)}>
-          <span className="flex-1 truncate">{chat.title}</span>
+      {chat.title ? (
+        <SidebarMenuButton asChild isActive={isActive}>
+          <Link href={`/chat/${chat.id}`} onClick={() => setOpenMobile(false)}>
+            <span className="flex-1 truncate">{chat.title}</span>
+            <ChatTypeBadge chatType={chat.chatType} />
+          </Link>
+        </SidebarMenuButton>
+      ) : (
+        <SidebarMenuButton isActive={isActive}>
+          <span className="flex-1">
+            <span className="inline-block h-4 w-32 animate-pulse rounded bg-sidebar-accent-foreground/10" />
+          </span>
           <ChatTypeBadge chatType={chat.chatType} />
-        </Link>
-      </SidebarMenuButton>
+        </SidebarMenuButton>
+      )}
 
-      <DropdownMenu modal={true}>
-        <DropdownMenuTrigger asChild>
-          <SidebarMenuAction
-            className="mr-0.5 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            showOnHover={!isActive}
-          >
-            <MoreHorizontalIcon />
-            <span className="sr-only">More</span>
-          </SidebarMenuAction>
-        </DropdownMenuTrigger>
+      {chat.title && (
+        <DropdownMenu modal={true}>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuAction
+              className="mr-0.5 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              showOnHover={!isActive}
+            >
+              <MoreHorizontalIcon />
+              <span className="sr-only">More</span>
+            </SidebarMenuAction>
+          </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end" side="bottom">
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="cursor-pointer">
-              <ShareIcon />
-              <span>Share</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                <DropdownMenuItem
-                  className="cursor-pointer flex-row justify-between"
-                  onClick={() => {
-                    setVisibilityType("private");
-                  }}
-                >
-                  <div className="flex flex-row items-center gap-2">
-                    <LockIcon size={12} />
-                    <span>Private</span>
-                  </div>
-                  {visibilityType === "private" ? (
-                    <CheckCircleFillIcon />
-                  ) : null}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer flex-row justify-between"
-                  onClick={() => {
-                    setVisibilityType("public");
-                  }}
-                >
-                  <div className="flex flex-row items-center gap-2">
-                    <GlobeIcon />
-                    <span>Public</span>
-                  </div>
-                  {visibilityType === "public" ? <CheckCircleFillIcon /> : null}
-                </DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
+          <DropdownMenuContent align="end" side="bottom">
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="cursor-pointer">
+                <ShareIcon />
+                <span>Share</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem
+                    className="cursor-pointer flex-row justify-between"
+                    onClick={() => {
+                      setVisibilityType("private");
+                    }}
+                  >
+                    <div className="flex flex-row items-center gap-2">
+                      <LockIcon size={12} />
+                      <span>Private</span>
+                    </div>
+                    {visibilityType === "private" ? (
+                      <CheckCircleFillIcon />
+                    ) : null}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer flex-row justify-between"
+                    onClick={() => {
+                      setVisibilityType("public");
+                    }}
+                  >
+                    <div className="flex flex-row items-center gap-2">
+                      <GlobeIcon />
+                      <span>Public</span>
+                    </div>
+                    {visibilityType === "public" ? (
+                      <CheckCircleFillIcon />
+                    ) : null}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
 
-          <DropdownMenuItem
-            className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
-            onSelect={() => onDelete(chat.id)}
-          >
-            <TrashIcon />
-            <span>Delete</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <DropdownMenuItem
+              className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
+              onSelect={() => onDelete(chat.id)}
+            >
+              <TrashIcon />
+              <span>Delete</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </SidebarMenuItem>
   );
 };
 
 export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
   if (prevProps.isActive !== nextProps.isActive) {
+    return false;
+  }
+  if (prevProps.chat.title !== nextProps.chat.title) {
+    return false;
+  }
+  if (prevProps.chat.chatType !== nextProps.chat.chatType) {
     return false;
   }
   return true;
