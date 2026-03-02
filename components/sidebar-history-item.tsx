@@ -27,10 +27,7 @@ import {
 } from "./ui/sidebar";
 
 /** 会话类型标签颜色和文字映射 */
-const CHAT_TYPE_CONFIG: Record<
-  string,
-  { label: string; className: string }
-> = {
+const CHAT_TYPE_CONFIG: Record<string, { label: string; className: string }> = {
   text: {
     label: "文本",
     className:
@@ -53,13 +50,11 @@ const CHAT_TYPE_CONFIG: Record<
   },
 };
 
-function ChatTypeBadge({
-  chatType,
-}: {
-  chatType: string;
-}) {
+function ChatTypeBadge({ chatType }: { chatType: string }) {
   const config = CHAT_TYPE_CONFIG[chatType];
-  if (!config) return null;
+  if (!config) {
+    return null;
+  }
 
   return (
     <span

@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
     // 创建 chat 条目
     const now = new Date();
-    const title = `${now.getMonth() + 1}月${now.getDate()}日电话面试（${Math.round(body.duration / 60000)}分钟）`;
+    const title = `${now.getMonth() + 1}月${now.getDate()}日电话面试（${Math.round(body.duration / 60_000)}分钟）`;
     await saveChat({
       id: chatId,
       userId: session.user.id,

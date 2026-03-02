@@ -30,7 +30,10 @@ import { Artifact } from "./artifact";
 import { useDataStream } from "./data-stream-provider";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
-import { getChatHistoryPaginationKey, type ChatHistory } from "./sidebar-history";
+import {
+  type ChatHistory,
+  getChatHistoryPaginationKey,
+} from "./sidebar-history";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
 import { useVoiceMode, type VoiceMode } from "./voice-mode-context";
@@ -76,7 +79,9 @@ export function Chat({
 
   // 加载已有会话时，同步 voiceMode 到该会话的 chatType
   useEffect(() => {
-    if (!initialChatType) return;
+    if (!initialChatType) {
+      return;
+    }
     const modeMap: Record<string, VoiceMode> = {
       text: "text",
       voice: "voice",
@@ -89,7 +94,7 @@ export function Chat({
     }
     // 仅在 mount 时执行一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialChatType, setVoiceMode, voiceMode]);
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -170,10 +175,15 @@ export function Chat({
           key,
           (currentData: ChatHistory[] | undefined) => {
             if (!currentData || currentData.length === 0) {
-              return [{ chats: [optimisticChat], hasMore: false }] as ChatHistory[];
+              return [
+                { chats: [optimisticChat], hasMore: false },
+              ] as ChatHistory[];
             }
             return [
-              { ...currentData[0], chats: [optimisticChat, ...currentData[0].chats] },
+              {
+                ...currentData[0],
+                chats: [optimisticChat, ...currentData[0].chats],
+              },
               ...currentData.slice(1),
             ] as ChatHistory[];
           },
@@ -229,7 +239,6 @@ export function Chat({
   useEffect(() => {
     onHasActiveChatChange?.(messages.length > 0);
   }, [messages.length, onHasActiveChatChange]);
-
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");

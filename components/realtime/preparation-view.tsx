@@ -14,8 +14,7 @@ import { FileText, Loader2, Mic, Upload, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { realtimeModels, type RealtimeModel } from "@/lib/ai/realtime-models";
-import type { ResumeAnalysis } from "@/lib/ai/agent/resume-analyze";
+import { realtimeModels } from "@/lib/ai/realtime-models";
 
 /** 将 PDF 文件读取为 base64 字符串 */
 const readFileAsBase64 = (file: File): Promise<string> =>
@@ -45,7 +44,7 @@ export function PreparationView({
 }) {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeText, setResumeText] = useState<string>("");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isAnalyzing, _setIsAnalyzing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,7 +52,9 @@ export function PreparationView({
   const handleFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
-      if (!file) return;
+      if (!file) {
+        return;
+      }
 
       if (file.type !== "application/pdf") {
         toast.error("仅支持 PDF 格式的文件");
@@ -101,7 +102,7 @@ export function PreparationView({
     }
   }, [onStart, resumeText]);
 
-  const currentModel = realtimeModels.find((m) => m.id === selectedModel);
+  const _currentModel = realtimeModels.find((m) => m.id === selectedModel);
 
   return (
     <div className="flex h-full flex-col">
@@ -151,7 +152,7 @@ export function PreparationView({
             </div>
           ) : (
             <button
-              className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-muted-foreground/20 px-4 py-6 transition-colors hover:border-primary/50 hover:bg-primary/5"
+              className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-muted-foreground/20 border-dashed px-4 py-6 transition-colors hover:border-primary/50 hover:bg-primary/5"
               onClick={() => fileInputRef.current?.click()}
               type="button"
             >
@@ -168,7 +169,7 @@ export function PreparationView({
 
         {/* 模型选择 */}
         <div className="w-full max-w-md">
-          <label className="mb-2 block font-medium text-sm">选择语音模型</label>
+          <span className="mb-2 block font-medium text-sm">选择语音模型</span>
           <div className="flex flex-col gap-2">
             {realtimeModels.map((model) => (
               <button

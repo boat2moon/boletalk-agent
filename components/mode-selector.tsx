@@ -105,7 +105,7 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
     >
       {/* 滑动背景指示器 */}
       <div
-        className={`absolute top-1 bottom-1 rounded-lg shadow-sm ease-in-out bg-[#2979ff]/40 dark:bg-[#00e676]/20 ${
+        className={`absolute top-1 bottom-1 rounded-lg bg-[#2979ff]/40 shadow-sm ease-in-out dark:bg-[#00e676]/20 ${
           enableTransition ? "transition-all duration-300" : ""
         }`}
         style={{
@@ -137,7 +137,9 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
             disabled={isComingSoon}
             key={option.value}
             onClick={() => {
-              if (isComingSoon) return;
+              if (isComingSoon) {
+                return;
+              }
               if (isNewChatAction) {
                 // 先切换模式触发滑动动画，延迟跳转让动画播放完
                 setVoiceMode(option.value);
@@ -160,7 +162,10 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
             <TooltipProvider delayDuration={0} key={option.value}>
               <Tooltip>
                 <TooltipTrigger asChild>{button}</TooltipTrigger>
-                <TooltipContent className="z-100 bg-zinc-800 text-white border-zinc-700" side="bottom">
+                <TooltipContent
+                  className="z-100 border-zinc-700 bg-zinc-800 text-white"
+                  side="bottom"
+                >
                   <p>即将推出</p>
                 </TooltipContent>
               </Tooltip>
@@ -174,7 +179,10 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
             <TooltipProvider delayDuration={0} key={option.value}>
               <Tooltip>
                 <TooltipTrigger asChild>{button}</TooltipTrigger>
-                <TooltipContent className="z-100 bg-zinc-800 text-white border-zinc-700" side="bottom">
+                <TooltipContent
+                  className="z-100 border-zinc-700 bg-zinc-800 text-white"
+                  side="bottom"
+                >
                   <p>新建{option.label}会话</p>
                 </TooltipContent>
               </Tooltip>

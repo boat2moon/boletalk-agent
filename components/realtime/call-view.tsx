@@ -12,17 +12,13 @@
  */
 
 import { Loader2, Mic, MicOff, PhoneOff } from "lucide-react";
-import { SparklesIcon } from "@/components/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { SparklesIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import type { TranscriptEntry } from "./realtime-page";
 
-type ConnectionStatus =
-  | "connecting"
-  | "connected"
-  | "disconnected"
-  | "error";
+type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
 
 export function CallView({
   wsUrl,
@@ -52,6 +48,7 @@ export function CallView({
   const audioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   /** 聊天区域滚动容器 */
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const isMutedRef = useRef(false);
 
   // 同步 transcript ref + 自动滚动
   useEffect(() => {
@@ -62,185 +59,61 @@ export function CallView({
     }
   }, [transcript]);
 
-  /**
-   * 初始化 WebSocket 连接和音频采集
-   */
   useEffect(() => {
-    let cancelled = false;
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
 
-    const init = async () => {
+  // ── 按依赖顺序声明 useCallback（被依赖者在前面）──
+
+  /**
+   * 停止所有正在排队/播放的音频（用户打断时调用）
+   */
+  const stopAllAudio = useCallback(() => {
+    for (const source of audioSourcesRef.current) {
       try {
-        // 1. 建立 WebSocket 连接
-        const ws = new WebSocket(`${wsUrl}?token=${sessionToken}`);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-          if (cancelled) return;
-          console.log("[WS] Connected to bole-server");
-        };
-
-        ws.onmessage = (event) => {
-          if (cancelled) return;
-          handleServerMessage(event.data);
-        };
-
-        ws.onclose = (event) => {
-          if (cancelled) return;
-          console.log(`[WS] Closed: ${event.code} ${event.reason}`);
-          if (event.code !== 1000) {
-            toast.error(`连接断开: ${event.reason || `错误码 ${event.code}`}`);
-          }
-          setStatus("disconnected");
-        };
-
-        ws.onerror = () => {
-          if (cancelled) return;
-          setStatus("error");
-        };
-      } catch (err) {
-        console.error("[Init] Failed:", err);
-        setStatus("error");
+        source.stop();
+      } catch (_e) {
+        // 忽略已停止的
       }
-    };
-
-    init();
-
-    return () => {
-      cancelled = true;
-      cleanup();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }
+    audioSourcesRef.current = [];
+    nextPlayTimeRef.current = 0;
   }, []);
 
   /**
-   * 处理 bole-server 发来的消息
+   * 清理所有资源
    */
-  const handleServerMessage = useCallback((data: string) => {
-    try {
-      const msg = JSON.parse(data);
+  const cleanup = useCallback(() => {
+    stopAllAudio();
 
-      switch (msg.type) {
-        case "ready":
-          // Gemini 连接就绪，开始采集音频
-          setStatus("connected");
-          startAudioCapture();
-          startTimer();
-          break;
-
-        case "audio":
-          // 播放 AI 面试官的语音
-          setIsAgentSpeaking(true);
-          playAudio(msg.data, msg.mimeType);
-          break;
-
-        case "transcript":
-          // 最终确认的完整消息 — 替换或追加
-          setTranscript((prev) => {
-            // 如果上一条是同角色的中间更新，替换它
-            const last = prev[prev.length - 1];
-            if (last && last.role === msg.role && !last.isFinal) {
-              return [
-                ...prev.slice(0, -1),
-                {
-                  role: msg.role,
-                  text: msg.text,
-                  timestamp: Date.now(),
-                  isFinal: true,
-                },
-              ];
-            }
-            // 否则追加新条目
-            return [
-              ...prev,
-              {
-                role: msg.role,
-                text: msg.text,
-                timestamp: Date.now(),
-                isFinal: true,
-              },
-            ];
-          });
-          break;
-
-        case "transcript_update":
-          // ASR 中间结果 — 更新上一条同角色消息（或新建）
-          setTranscript((prev) => {
-            const last = prev[prev.length - 1];
-            if (last && last.role === msg.role && !last.isFinal) {
-              // 更新上一条中间消息
-              return [
-                ...prev.slice(0, -1),
-                { ...last, text: msg.text, timestamp: Date.now() },
-              ];
-            }
-            // 首次中间结果，新建一条
-            return [
-              ...prev,
-              {
-                role: msg.role,
-                text: msg.text,
-                timestamp: Date.now(),
-                isFinal: false,
-              },
-            ];
-          });
-          break;
-
-        case "transcript_delta":
-          // LLM 文本碎片 — 追加到最后一条同角色消息
-          setTranscript((prev) => {
-            const last = prev[prev.length - 1];
-            if (last && last.role === msg.role) {
-              return [
-                ...prev.slice(0, -1),
-                {
-                  ...last,
-                  text: last.text + msg.text,
-                  timestamp: Date.now(),
-                },
-              ];
-            }
-            // 如果没有同角色消息，新建
-            return [
-              ...prev,
-              {
-                role: msg.role,
-                text: msg.text,
-                timestamp: Date.now(),
-                isFinal: false,
-              },
-            ];
-          });
-          break;
-
-        case "turnComplete":
-          setIsAgentSpeaking(false);
-          break;
-
-        case "interrupted":
-          // 用户打断了 AI 说话，停止所有排队的音频
-          stopAllAudio();
-          setIsAgentSpeaking(false);
-          break;
-
-        case "sessionEnd":
-          handleEndCall();
-          break;
-
-        case "pong":
-          // 心跳响应，忽略
-          break;
-
-        case "error":
-          console.error("[Server Error]:", msg.message);
-          toast.error(msg.message || "语音连接异常");
-          break;
-      }
-    } catch (err) {
-      console.error("[Message Parse Error]:", err);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      // biome-ignore lint/suspicious/noEmptyBlockStatements: intentional catch-and-ignore
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+
+    if (mediaStreamRef.current) {
+      for (const track of mediaStreamRef.current.getTracks()) {
+        track.stop();
+      }
+      mediaStreamRef.current = null;
+    }
+
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, [stopAllAudio]);
 
   /**
    * 开始采集麦克风音频
@@ -249,7 +122,7 @@ export function CallView({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          sampleRate: 16000,
+          sampleRate: 16_000,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
@@ -257,7 +130,7 @@ export function CallView({
       });
       mediaStreamRef.current = stream;
 
-      const audioContext = new AudioContext({ sampleRate: 16000 });
+      const audioContext = new AudioContext({ sampleRate: 16_000 });
       audioContextRef.current = audioContext;
 
       const source = audioContext.createMediaStreamSource(stream);
@@ -269,8 +142,12 @@ export function CallView({
       processorRef.current = processor;
 
       processor.onaudioprocess = (event) => {
-        if (isMutedRef.current) return;
-        if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+        if (isMutedRef.current) {
+          return;
+        }
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+          return;
+        }
 
         const inputData = event.inputBuffer.getChannelData(0);
 
@@ -278,7 +155,7 @@ export function CallView({
         const pcmData = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+          pcmData[i] = s < 0 ? s * 0x80_00 : s * 0x7f_ff;
         }
 
         // Base64 编码后发送
@@ -301,82 +178,56 @@ export function CallView({
     }
   }, []);
 
-  const isMutedRef = useRef(false);
-  useEffect(() => {
-    isMutedRef.current = isMuted;
-  }, [isMuted]);
-
-  /**
-   * 停止所有正在排队/播放的音频（用户打断时调用）
-   */
-  const stopAllAudio = useCallback(() => {
-    for (const source of audioSourcesRef.current) {
-      try {
-        source.stop();
-      } catch (_e) {
-        // 忽略已停止的
-      }
-    }
-    audioSourcesRef.current = [];
-    nextPlayTimeRef.current = 0;
-  }, []);
-
   /**
    * 播放从服务端收到的音频数据（队列式，按顺序拼接播放）
-   *
-   * 关键：使用 AudioContext.currentTime + nextPlayTime 来安排
-   * 每个片段的精确播放时间，避免同时叠加。
    */
-  const playAudio = useCallback(
-    (base64Data: string, _mimeType: string) => {
-      try {
-        if (!audioContextRef.current) {
-          audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-        }
-        const ctx = audioContextRef.current;
-
-        // base64 → Uint8Array
-        const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        // 16-bit signed PCM → Float32（24kHz 单声道）
-        const int16Array = new Int16Array(bytes.buffer);
-        const float32Array = new Float32Array(int16Array.length);
-        for (let i = 0; i < int16Array.length; i++) {
-          float32Array[i] = int16Array[i] / 32768;
-        }
-
-        const audioBuffer = ctx.createBuffer(1, float32Array.length, 24000);
-        audioBuffer.copyToChannel(float32Array, 0);
-
-        const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(ctx.destination);
-
-        // 计算该片段的播放开始时间
-        const now = ctx.currentTime;
-        const startTime = Math.max(now, nextPlayTimeRef.current);
-        source.start(startTime);
-
-        // 更新下一个片段的开始时间
-        nextPlayTimeRef.current = startTime + audioBuffer.duration;
-
-        // 追踪，用于打断时停止
-        audioSourcesRef.current.push(source);
-        source.onended = () => {
-          audioSourcesRef.current = audioSourcesRef.current.filter(
-            (s) => s !== source
-          );
-        };
-      } catch (err) {
-        console.error("[Audio] Playback error:", err);
+  const playAudio = useCallback((base64Data: string, _mimeType: string) => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext({ sampleRate: 24_000 });
       }
-    },
-    []
-  );
+      const ctx = audioContextRef.current;
+
+      // base64 → Uint8Array
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      // 16-bit signed PCM → Float32（24kHz 单声道）
+      const int16Array = new Int16Array(bytes.buffer);
+      const float32Array = new Float32Array(int16Array.length);
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32_768;
+      }
+
+      const audioBuffer = ctx.createBuffer(1, float32Array.length, 24_000);
+      audioBuffer.copyToChannel(float32Array, 0);
+
+      const bufferSource = ctx.createBufferSource();
+      bufferSource.buffer = audioBuffer;
+      bufferSource.connect(ctx.destination);
+
+      // 计算该片段的播放开始时间
+      const now = ctx.currentTime;
+      const startTime = Math.max(now, nextPlayTimeRef.current);
+      bufferSource.start(startTime);
+
+      // 更新下一个片段的开始时间
+      nextPlayTimeRef.current = startTime + audioBuffer.duration;
+
+      // 追踪，用于打断时停止
+      audioSourcesRef.current.push(bufferSource);
+      bufferSource.onended = () => {
+        audioSourcesRef.current = audioSourcesRef.current.filter(
+          (s) => s !== bufferSource
+        );
+      };
+    } catch (err) {
+      console.error("[Audio] Playback error:", err);
+    }
+  }, []);
 
   /**
    * 启动通话计时器
@@ -400,42 +251,192 @@ export function CallView({
     const duration = Date.now() - startTimeRef.current;
     cleanup();
     onEnd(transcriptRef.current, duration);
-  }, [onEnd]);
+  }, [onEnd, cleanup]);
 
   /**
-   * 清理所有资源
+   * 处理 bole-server 发来的消息
    */
-  const cleanup = useCallback(() => {
-    // 停止所有排队的音频
-    stopAllAudio();
+  const handleServerMessage = useCallback(
+    (data: string) => {
+      try {
+        const msg = JSON.parse(data);
 
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+        switch (msg.type) {
+          case "ready":
+            // Gemini 连接就绪，开始采集音频
+            setStatus("connected");
+            startAudioCapture();
+            startTimer();
+            break;
 
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
-    }
+          case "audio":
+            // 播放 AI 面试官的语音
+            setIsAgentSpeaking(true);
+            playAudio(msg.data, msg.mimeType);
+            break;
 
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
+          case "transcript":
+            // 最终确认的完整消息 — 替换或追加
+            setTranscript((prev) => {
+              const last = prev.at(-1);
+              if (last && last.role === msg.role && !last.isFinal) {
+                return [
+                  ...prev.slice(0, -1),
+                  {
+                    role: msg.role,
+                    text: msg.text,
+                    timestamp: Date.now(),
+                    isFinal: true,
+                  },
+                ];
+              }
+              return [
+                ...prev,
+                {
+                  role: msg.role,
+                  text: msg.text,
+                  timestamp: Date.now(),
+                  isFinal: true,
+                },
+              ];
+            });
+            break;
 
-    if (mediaStreamRef.current) {
-      for (const track of mediaStreamRef.current.getTracks()) {
-        track.stop();
+          case "transcript_update":
+            // ASR 中间结果
+            setTranscript((prev) => {
+              const last = prev.at(-1);
+              if (last && last.role === msg.role && !last.isFinal) {
+                return [
+                  ...prev.slice(0, -1),
+                  { ...last, text: msg.text, timestamp: Date.now() },
+                ];
+              }
+              return [
+                ...prev,
+                {
+                  role: msg.role,
+                  text: msg.text,
+                  timestamp: Date.now(),
+                  isFinal: false,
+                },
+              ];
+            });
+            break;
+
+          case "transcript_delta":
+            // LLM 文本碎片
+            setTranscript((prev) => {
+              const last = prev.at(-1);
+              if (last && last.role === msg.role) {
+                return [
+                  ...prev.slice(0, -1),
+                  {
+                    ...last,
+                    text: last.text + msg.text,
+                    timestamp: Date.now(),
+                  },
+                ];
+              }
+              return [
+                ...prev,
+                {
+                  role: msg.role,
+                  text: msg.text,
+                  timestamp: Date.now(),
+                  isFinal: false,
+                },
+              ];
+            });
+            break;
+
+          case "turnComplete":
+            setIsAgentSpeaking(false);
+            break;
+
+          case "interrupted":
+            stopAllAudio();
+            setIsAgentSpeaking(false);
+            break;
+
+          case "sessionEnd":
+            handleEndCall();
+            break;
+
+          case "pong":
+            break;
+
+          case "error":
+            console.error("[Server Error]:", msg.message);
+            toast.error(msg.message || "语音连接异常");
+            break;
+
+          default:
+            break;
+        }
+      } catch (err) {
+        console.error("[Message Parse Error]:", err);
       }
-      mediaStreamRef.current = null;
-    }
+    },
+    [handleEndCall, playAudio, startAudioCapture, startTimer, stopAllAudio]
+  );
 
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-  }, []);
+  /**
+   * 初始化 WebSocket 连接和音频采集
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const init = () => {
+      try {
+        // 1. 建立 WebSocket 连接
+        const ws = new WebSocket(`${wsUrl}?token=${sessionToken}`);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          if (cancelled) {
+            return;
+          }
+          console.log("[WS] Connected to bole-server");
+        };
+
+        ws.onmessage = (event) => {
+          if (cancelled) {
+            return;
+          }
+          handleServerMessage(event.data);
+        };
+
+        ws.onclose = (event) => {
+          if (cancelled) {
+            return;
+          }
+          console.log(`[WS] Closed: ${event.code} ${event.reason}`);
+          if (event.code !== 1000) {
+            toast.error(`连接断开: ${event.reason || `错误码 ${event.code}`}`);
+          }
+          setStatus("disconnected");
+        };
+
+        ws.onerror = () => {
+          if (cancelled) {
+            return;
+          }
+          setStatus("error");
+        };
+      } catch (err) {
+        console.error("[Init] Failed:", err);
+        setStatus("error");
+      }
+    };
+
+    init();
+
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [cleanup, handleServerMessage, sessionToken, wsUrl]);
 
   /**
    * 心跳（每 30 秒发一次 ping）
@@ -445,7 +446,7 @@ export function CallView({
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "ping" }));
       }
-    }, 30000);
+    }, 30_000);
 
     return () => clearInterval(heartbeat);
   }, []);
@@ -458,6 +459,8 @@ export function CallView({
     const s = (seconds % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
+
+  const SOUND_BARS = [0, 1, 2, 3, 4] as const;
 
   return (
     <div className="flex h-full flex-col">
@@ -495,7 +498,7 @@ export function CallView({
             {/* 语音状态指示器 */}
             <div className="flex items-center gap-3 py-2">
               <div className="flex items-center gap-1.5">
-                {[...Array(5)].map((_, i) => (
+                {SOUND_BARS.map((i) => (
                   <div
                     className={`w-1 rounded-full bg-primary transition-all duration-300 ${
                       isAgentSpeaking ? "animate-pulse" : "h-1.5 opacity-30"
@@ -530,7 +533,7 @@ export function CallView({
                     className={`group/message flex w-full items-start gap-2 md:gap-3 ${
                       entry.role === "user" ? "justify-end" : "justify-start"
                     }`}
-                    key={`t-${entry.timestamp}-${i}`}
+                    key={`t-${entry.timestamp}-${entry.role}-${i}`}
                   >
                     {/* 面试官头像 */}
                     {entry.role === "assistant" && (
@@ -567,9 +570,15 @@ export function CallView({
                     </div>
                     <div className="flex items-center gap-1 text-muted-foreground text-sm">
                       <span className="inline-flex">
-                        <span className="animate-bounce [animation-delay:0ms]">.</span>
-                        <span className="animate-bounce [animation-delay:150ms]">.</span>
-                        <span className="animate-bounce [animation-delay:300ms]">.</span>
+                        <span className="animate-bounce [animation-delay:0ms]">
+                          .
+                        </span>
+                        <span className="animate-bounce [animation-delay:150ms]">
+                          .
+                        </span>
+                        <span className="animate-bounce [animation-delay:300ms]">
+                          .
+                        </span>
                       </span>
                     </div>
                   </div>

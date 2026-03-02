@@ -106,11 +106,7 @@ export function InterviewSummary({
 
       {/* 底部按钮 */}
       <div className="flex gap-3 border-t bg-background px-4 py-4">
-        <Button
-          className="flex-1"
-          onClick={onNewInterview}
-          variant="outline"
-        >
+        <Button className="flex-1" onClick={onNewInterview} variant="outline">
           <RotateCcw className="mr-2" size={16} />
           再来一次
         </Button>

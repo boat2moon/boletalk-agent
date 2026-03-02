@@ -41,7 +41,8 @@ const BOLE_SERVER_WS_URL =
   process.env.BOLE_SERVER_WS_URL || "wss://bole-server.your-domain.workers.dev";
 
 /** 用于签发 JWT 的密钥（需要和 bole-server 的 SESSION_SECRET 一致） */
-const SESSION_SECRET = process.env.REALTIME_SESSION_SECRET || "dev-secret-change-me";
+const SESSION_SECRET =
+  process.env.REALTIME_SESSION_SECRET || "dev-secret-change-me";
 
 /** 默认的模拟面试 system prompt（不上传简历时使用） */
 const DEFAULT_INTERVIEW_PROMPT = `你是一个专业的程序员面试官，擅长前端技术栈，包括 HTML、CSS、JavaScript、TypeScript、React、Vue、Node.js、小程序等技术。
@@ -190,12 +191,18 @@ function base64UrlEncodeString(str: string): string {
   return base64UrlEncodeBytes(bytes);
 }
 
+const PLUS_RE = /\+/g;
+const SLASH_RE = /\//g;
+const TRAILING_EQ_RE = /=+$/;
+
 /** 将字节数组编码为 base64url */
 function base64UrlEncodeBytes(bytes: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
   }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(binary)
+    .replace(PLUS_RE, "-")
+    .replace(SLASH_RE, "_")
+    .replace(TRAILING_EQ_RE, "");
 }
-

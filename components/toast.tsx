@@ -12,11 +12,9 @@ const iconsByType: Record<"success" | "error", ReactNode> = {
 
 export function toast(props: Omit<ToastProps, "id">) {
   return sonnerToast.custom(
-    (id) => (
-      <Toast description={props.description} id={id} type={props.type} />
-    ),
+    (id) => <Toast description={props.description} id={id} type={props.type} />,
     // error 类型不自动消失
-    props.type === "error" ? { duration: Infinity } : undefined
+    props.type === "error" ? { duration: Number.POSITIVE_INFINITY } : undefined
   );
 }
 
@@ -78,15 +76,15 @@ function Toast(props: ToastProps) {
         {type === "error" && (
           <div className="flex items-center justify-end gap-2 pt-1">
             <a
-              className="rounded-md px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors"
+              className="rounded-md px-2.5 py-1 font-medium text-blue-600 text-xs transition-colors hover:bg-blue-50"
               href="https://www.boat2moon.com"
-              target="_blank"
               rel="noopener noreferrer"
+              target="_blank"
             >
               联系管理员
             </a>
             <button
-              className="rounded-md bg-zinc-800 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 transition-colors cursor-pointer"
+              className="cursor-pointer rounded-md bg-zinc-800 px-3 py-1 font-medium text-white text-xs transition-colors hover:bg-zinc-700"
               onClick={() => sonnerToast.dismiss(id)}
               type="button"
             >

@@ -12,16 +12,11 @@
  * 从而保持 ModeSelector 的滑动动画连贯性。
  */
 
-import {
-  type ReactElement,
-  cloneElement,
-  useCallback,
-  useState,
-} from "react";
+import { cloneElement, type ReactElement, useCallback, useState } from "react";
 import { ChatHeader } from "@/components/chat-header";
-import { useVoiceMode } from "@/components/voice-mode-context";
 import { RealtimePage } from "@/components/realtime/realtime-page";
 import type { VisibilityType } from "@/components/visibility-selector";
+import { useVoiceMode } from "@/components/voice-mode-context";
 
 export function ModeAwareContainer({
   children,

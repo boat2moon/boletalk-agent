@@ -40,8 +40,9 @@ export function RealtimePage({
 }) {
   const [phase, setPhase] = useState<RealtimePhase>("preparation");
   const [selectedModel, setSelectedModel] = useState(DEFAULT_REALTIME_MODEL);
-  const [resumeAnalysis, setResumeAnalysis] =
-    useState<ResumeAnalysis | null>(null);
+  const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(
+    null
+  );
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [callDuration, setCallDuration] = useState(0);
   const chatIdRef = useRef(generateUUID());
@@ -101,10 +102,7 @@ export function RealtimePage({
    * 面试结束
    */
   const handleCallEnd = useCallback(
-    async (
-      finalTranscript: TranscriptEntry[],
-      duration: number
-    ) => {
+    async (finalTranscript: TranscriptEntry[], duration: number) => {
       setTranscript(finalTranscript);
       setCallDuration(duration);
       setPhase("summary");

@@ -32,13 +32,9 @@ const resumeAnalysisSchema = z.object({
     .array(z.string())
     .describe("候选人掌握的主要技术栈，按熟练度排序"),
   /** 简历亮点 */
-  strengths: z
-    .array(z.string())
-    .describe("简历中的亮点和优势，最多 5 条"),
+  strengths: z.array(z.string()).describe("简历中的亮点和优势，最多 5 条"),
   /** 简历不足 */
-  weaknesses: z
-    .array(z.string())
-    .describe("简历中的不足或待改进点，最多 5 条"),
+  weaknesses: z.array(z.string()).describe("简历中的不足或待改进点，最多 5 条"),
   /** 建议的面试方向 */
   suggestedInterviewDirections: z
     .array(
