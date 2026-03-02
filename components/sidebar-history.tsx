@@ -2,7 +2,7 @@
 
 import { isToday, isYesterday, subMonths, subWeeks } from "date-fns";
 import { motion } from "framer-motion";
-import { useParams, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -99,7 +99,10 @@ export function getChatHistoryPaginationKey(
 
 export function SidebarHistory({ user }: { user: User | undefined }) {
   const { setOpenMobile } = useSidebar();
-  const { id } = useParams();
+  const pathname = usePathname();
+  // 从 URL path 中提取 chatId（/chat/xxx -> xxx）
+  // usePathname 能跟踪 window.history.pushState 引起的 URL 变化，而 useParams 不行
+  const id = pathname?.startsWith("/chat/") ? pathname.slice(6) : undefined;
 
   const {
     data: paginatedChatHistories,

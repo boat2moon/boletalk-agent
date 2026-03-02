@@ -177,6 +177,9 @@ export async function POST(request: Request) {
     const chat = await getChatById({ id });
     let messagesFromDb: DBMessage[] = [];
 
+    // 新建聊天时保存标题，供后续传入流
+    let chatTitle: string | undefined;
+
     if (chat) {
       if (chat.userId !== session.user.id) {
         return new ChatSDKError("forbidden:chat").toResponse();
@@ -184,15 +187,16 @@ export async function POST(request: Request) {
       messagesFromDb = await getMessagesByChatId({ id });
     } else {
       // 新建聊天时，用处理后的 newMessage 生成标题
-      const title = await generateTitleFromUserMessage({
+      chatTitle = await generateTitleFromUserMessage({
         message: newMessage,
       });
 
       await saveChat({
         id,
         userId: session.user.id,
-        title,
+        title: chatTitle,
         visibility: selectedVisibilityType,
+        chatType: voiceMode ? "voice" : "text",
       });
     }
 
@@ -235,6 +239,7 @@ export async function POST(request: Request) {
       // biome-ignore lint/style/noNonNullAssertion: session is checked above via auth()
       session: session!,
       voiceMode: voiceMode === true,
+      chatTitle,
       // onFinish 回调：保存 AI 回复消息和 usage 到数据库
       onFinish: async ({ messages: finishedMessages, usage }) => {
         await saveMessages({

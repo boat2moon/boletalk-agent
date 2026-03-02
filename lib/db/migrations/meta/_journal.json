@@ -64,6 +64,13 @@
       "when": 1772346437290,
       "tag": "0008_closed_toad_men",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1772445557800,
+      "tag": "0009_add-chat-type",
+      "breakpoints": true
     }
   ]
 }

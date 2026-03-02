@@ -1,0 +1,1 @@
+ALTER TABLE "Chat" ADD COLUMN "chatType" varchar DEFAULT 'text' NOT NULL;

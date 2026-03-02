@@ -40,7 +40,7 @@ export const myProvider = isTestEnvironment
           model: deepseek("deepseek-reasoner"),
           middleware: extractReasoningMiddleware({ tagName: "think" }),
         }),
-        "chat-model-glm": zhipu("glm-4-flash-250414"),
+        "chat-model-glm": zhipu("glm-4-air"),
         "title-model": deepseek("deepseek-chat"),
         "artifact-model": deepseek("deepseek-chat"),
       },

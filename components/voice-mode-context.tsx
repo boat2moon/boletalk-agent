@@ -12,8 +12,8 @@ import {
 // 四种交互模式
 // - text: 纯文本对话
 // - voice: 基础语音（STT → LLM → TTS）
-// - realtime: 高级语音（Realtime API，WebSocket 双向流）—— 尚未实现
-// - avatar: 数字人面试官（Realtime + Avatar 渲染）—— 尚未实现
+// - realtime: 电话面试（Realtime API，WebSocket 双向流）
+// - avatar: 视频面试（Realtime + Avatar 渲染）—— 尚未实现
 export type VoiceMode = "text" | "voice" | "realtime" | "avatar";
 
 type VoiceModeContextType = {

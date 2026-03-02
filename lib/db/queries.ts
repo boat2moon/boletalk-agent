@@ -119,11 +119,13 @@ export async function saveChat({
   userId,
   title,
   visibility,
+  chatType = "text",
 }: {
   id: string;
   userId: string;
   title: string;
   visibility: VisibilityType;
+  chatType?: "text" | "voice" | "realtime" | "avatar";
 }) {
   try {
     return await db.insert(chat).values({
@@ -132,6 +134,7 @@ export async function saveChat({
       userId,
       title,
       visibility,
+      chatType,
     });
   } catch (_error) {
     throw new ChatSDKError("bad_request:database", "Failed to save chat");

@@ -1,0 +1,612 @@
+"use client";
+
+/**
+ * 阶段2：实时语音通话页面
+ *
+ * 核心功能：
+ * - 通过 WebSocket 连接 bole-server（CF Worker）
+ * - 采集麦克风音频并发送
+ * - 接收并播放 AI 面试官的语音回复
+ * - 显示实时字幕/transcript
+ * - 通话控制（静音、结束）
+ */
+
+import { Loader2, Mic, MicOff, PhoneOff } from "lucide-react";
+import { SparklesIcon } from "@/components/icons";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import type { TranscriptEntry } from "./realtime-page";
+
+type ConnectionStatus =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "error";
+
+export function CallView({
+  wsUrl,
+  sessionToken,
+  onEnd,
+}: {
+  wsUrl: string;
+  sessionToken: string;
+  onEnd: (transcript: TranscriptEntry[], duration: number) => void;
+}) {
+  const [status, setStatus] = useState<ConnectionStatus>("connecting");
+  const [isMuted, setIsMuted] = useState(false);
+  const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [callDuration, setCallDuration] = useState(0);
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const transcriptRef = useRef<TranscriptEntry[]>([]);
+  /** 下一个音频片段应当开始播放的时间（AudioContext 时间轴） */
+  const nextPlayTimeRef = useRef<number>(0);
+  /** 当前正在排队的音频源（用于打断时批量停止） */
+  const audioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  /** 聊天区域滚动容器 */
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // 同步 transcript ref + 自动滚动
+  useEffect(() => {
+    transcriptRef.current = transcript;
+    // 滚到底部
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [transcript]);
+
+  /**
+   * 初始化 WebSocket 连接和音频采集
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const init = async () => {
+      try {
+        // 1. 建立 WebSocket 连接
+        const ws = new WebSocket(`${wsUrl}?token=${sessionToken}`);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          if (cancelled) return;
+          console.log("[WS] Connected to bole-server");
+        };
+
+        ws.onmessage = (event) => {
+          if (cancelled) return;
+          handleServerMessage(event.data);
+        };
+
+        ws.onclose = (event) => {
+          if (cancelled) return;
+          console.log(`[WS] Closed: ${event.code} ${event.reason}`);
+          if (event.code !== 1000) {
+            toast.error(`连接断开: ${event.reason || `错误码 ${event.code}`}`);
+          }
+          setStatus("disconnected");
+        };
+
+        ws.onerror = () => {
+          if (cancelled) return;
+          setStatus("error");
+        };
+      } catch (err) {
+        console.error("[Init] Failed:", err);
+        setStatus("error");
+      }
+    };
+
+    init();
+
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * 处理 bole-server 发来的消息
+   */
+  const handleServerMessage = useCallback((data: string) => {
+    try {
+      const msg = JSON.parse(data);
+
+      switch (msg.type) {
+        case "ready":
+          // Gemini 连接就绪，开始采集音频
+          setStatus("connected");
+          startAudioCapture();
+          startTimer();
+          break;
+
+        case "audio":
+          // 播放 AI 面试官的语音
+          setIsAgentSpeaking(true);
+          playAudio(msg.data, msg.mimeType);
+          break;
+
+        case "transcript":
+          // 最终确认的完整消息 — 替换或追加
+          setTranscript((prev) => {
+            // 如果上一条是同角色的中间更新，替换它
+            const last = prev[prev.length - 1];
+            if (last && last.role === msg.role && !last.isFinal) {
+              return [
+                ...prev.slice(0, -1),
+                {
+                  role: msg.role,
+                  text: msg.text,
+                  timestamp: Date.now(),
+                  isFinal: true,
+                },
+              ];
+            }
+            // 否则追加新条目
+            return [
+              ...prev,
+              {
+                role: msg.role,
+                text: msg.text,
+                timestamp: Date.now(),
+                isFinal: true,
+              },
+            ];
+          });
+          break;
+
+        case "transcript_update":
+          // ASR 中间结果 — 更新上一条同角色消息（或新建）
+          setTranscript((prev) => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === msg.role && !last.isFinal) {
+              // 更新上一条中间消息
+              return [
+                ...prev.slice(0, -1),
+                { ...last, text: msg.text, timestamp: Date.now() },
+              ];
+            }
+            // 首次中间结果，新建一条
+            return [
+              ...prev,
+              {
+                role: msg.role,
+                text: msg.text,
+                timestamp: Date.now(),
+                isFinal: false,
+              },
+            ];
+          });
+          break;
+
+        case "transcript_delta":
+          // LLM 文本碎片 — 追加到最后一条同角色消息
+          setTranscript((prev) => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === msg.role) {
+              return [
+                ...prev.slice(0, -1),
+                {
+                  ...last,
+                  text: last.text + msg.text,
+                  timestamp: Date.now(),
+                },
+              ];
+            }
+            // 如果没有同角色消息，新建
+            return [
+              ...prev,
+              {
+                role: msg.role,
+                text: msg.text,
+                timestamp: Date.now(),
+                isFinal: false,
+              },
+            ];
+          });
+          break;
+
+        case "turnComplete":
+          setIsAgentSpeaking(false);
+          break;
+
+        case "interrupted":
+          // 用户打断了 AI 说话，停止所有排队的音频
+          stopAllAudio();
+          setIsAgentSpeaking(false);
+          break;
+
+        case "sessionEnd":
+          handleEndCall();
+          break;
+
+        case "pong":
+          // 心跳响应，忽略
+          break;
+
+        case "error":
+          console.error("[Server Error]:", msg.message);
+          toast.error(msg.message || "语音连接异常");
+          break;
+      }
+    } catch (err) {
+      console.error("[Message Parse Error]:", err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * 开始采集麦克风音频
+   */
+  const startAudioCapture = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      mediaStreamRef.current = stream;
+
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = audioContext;
+
+      const source = audioContext.createMediaStreamSource(stream);
+
+      // 使用 ScriptProcessorNode 采集 PCM 数据
+      // 注意：ScriptProcessorNode 已被标记为废弃，但 AudioWorklet 增加了复杂度
+      // 未来可以迁移到 AudioWorklet
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+
+      processor.onaudioprocess = (event) => {
+        if (isMutedRef.current) return;
+        if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+
+        const inputData = event.inputBuffer.getChannelData(0);
+
+        // 转换 Float32 → Int16 PCM
+        const pcmData = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i]));
+          pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+
+        // Base64 编码后发送
+        const bytes = new Uint8Array(pcmData.buffer);
+        const base64 = btoa(String.fromCharCode(...bytes));
+
+        wsRef.current.send(
+          JSON.stringify({
+            type: "audio",
+            data: base64,
+          })
+        );
+      };
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+    } catch (err) {
+      console.error("[Audio] Failed to start capture:", err);
+      setStatus("error");
+    }
+  }, []);
+
+  const isMutedRef = useRef(false);
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
+
+  /**
+   * 停止所有正在排队/播放的音频（用户打断时调用）
+   */
+  const stopAllAudio = useCallback(() => {
+    for (const source of audioSourcesRef.current) {
+      try {
+        source.stop();
+      } catch (_e) {
+        // 忽略已停止的
+      }
+    }
+    audioSourcesRef.current = [];
+    nextPlayTimeRef.current = 0;
+  }, []);
+
+  /**
+   * 播放从服务端收到的音频数据（队列式，按顺序拼接播放）
+   *
+   * 关键：使用 AudioContext.currentTime + nextPlayTime 来安排
+   * 每个片段的精确播放时间，避免同时叠加。
+   */
+  const playAudio = useCallback(
+    (base64Data: string, _mimeType: string) => {
+      try {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+        }
+        const ctx = audioContextRef.current;
+
+        // base64 → Uint8Array
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        // 16-bit signed PCM → Float32（24kHz 单声道）
+        const int16Array = new Int16Array(bytes.buffer);
+        const float32Array = new Float32Array(int16Array.length);
+        for (let i = 0; i < int16Array.length; i++) {
+          float32Array[i] = int16Array[i] / 32768;
+        }
+
+        const audioBuffer = ctx.createBuffer(1, float32Array.length, 24000);
+        audioBuffer.copyToChannel(float32Array, 0);
+
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+
+        // 计算该片段的播放开始时间
+        const now = ctx.currentTime;
+        const startTime = Math.max(now, nextPlayTimeRef.current);
+        source.start(startTime);
+
+        // 更新下一个片段的开始时间
+        nextPlayTimeRef.current = startTime + audioBuffer.duration;
+
+        // 追踪，用于打断时停止
+        audioSourcesRef.current.push(source);
+        source.onended = () => {
+          audioSourcesRef.current = audioSourcesRef.current.filter(
+            (s) => s !== source
+          );
+        };
+      } catch (err) {
+        console.error("[Audio] Playback error:", err);
+      }
+    },
+    []
+  );
+
+  /**
+   * 启动通话计时器
+   */
+  const startTimer = useCallback(() => {
+    startTimeRef.current = Date.now();
+    timerRef.current = setInterval(() => {
+      setCallDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+  }, []);
+
+  /**
+   * 结束通话
+   */
+  const handleEndCall = useCallback(() => {
+    // 通知服务端
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "end" }));
+    }
+
+    const duration = Date.now() - startTimeRef.current;
+    cleanup();
+    onEnd(transcriptRef.current, duration);
+  }, [onEnd]);
+
+  /**
+   * 清理所有资源
+   */
+  const cleanup = useCallback(() => {
+    // 停止所有排队的音频
+    stopAllAudio();
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+
+    if (mediaStreamRef.current) {
+      for (const track of mediaStreamRef.current.getTracks()) {
+        track.stop();
+      }
+      mediaStreamRef.current = null;
+    }
+
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
+  /**
+   * 心跳（每 30 秒发一次 ping）
+   */
+  useEffect(() => {
+    const heartbeat = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 30000);
+
+    return () => clearInterval(heartbeat);
+  }, []);
+
+  /** 格式化时长 mm:ss */
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, "0");
+    const s = (seconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Header */}
+      <header className="flex items-center justify-between border-b bg-background px-4 py-3">
+        <h1 className="font-semibold">模拟面试中</h1>
+        <div className="font-mono text-muted-foreground text-sm">
+          ⏱️ {formatDuration(callDuration)}
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
+        {status === "connecting" && (
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="animate-spin text-primary" size={48} />
+            <p className="text-muted-foreground">正在连接面试官...</p>
+          </div>
+        )}
+
+        {status === "error" && (
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10">
+              <PhoneOff className="text-destructive" size={36} />
+            </div>
+            <p className="text-destructive">连接失败</p>
+            <Button onClick={() => window.location.reload()} variant="outline">
+              重试
+            </Button>
+          </div>
+        )}
+
+        {(status === "connected" || status === "disconnected") && (
+          <>
+            {/* 语音状态指示器 */}
+            <div className="flex items-center gap-3 py-2">
+              <div className="flex items-center gap-1.5">
+                {[...Array(5)].map((_, i) => (
+                  <div
+                    className={`w-1 rounded-full bg-primary transition-all duration-300 ${
+                      isAgentSpeaking ? "animate-pulse" : "h-1.5 opacity-30"
+                    }`}
+                    key={`bar-${i}`}
+                    style={{
+                      height: isAgentSpeaking
+                        ? `${8 + Math.random() * 16}px`
+                        : "6px",
+                      animationDelay: `${i * 100}ms`,
+                    }}
+                  />
+                ))}
+              </div>
+              <span className="text-muted-foreground text-xs">
+                {isAgentSpeaking
+                  ? "面试官正在说话..."
+                  : status === "disconnected"
+                    ? "面试已结束"
+                    : "请开始回答"}
+              </span>
+            </div>
+
+            {/* 聊天气泡区域 */}
+            <div
+              className="flex w-full flex-1 flex-col overflow-y-auto px-2 md:px-4"
+              ref={chatScrollRef}
+            >
+              <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 py-4">
+                {transcript.map((entry, i) => (
+                  <div
+                    className={`group/message flex w-full items-start gap-2 md:gap-3 ${
+                      entry.role === "user" ? "justify-end" : "justify-start"
+                    }`}
+                    key={`t-${entry.timestamp}-${i}`}
+                  >
+                    {/* 面试官头像 */}
+                    {entry.role === "assistant" && (
+                      <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
+                        <SparklesIcon size={14} />
+                      </div>
+                    )}
+
+                    {/* 消息气泡 */}
+                    <div
+                      className={`max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)] ${
+                        entry.role === "user"
+                          ? "wrap-break-word w-fit rounded-2xl px-3 py-2 text-right text-white"
+                          : "text-left text-sm"
+                      } ${!entry.isFinal && entry.role === "user" ? "opacity-60" : ""}`}
+                      style={
+                        entry.role === "user"
+                          ? { backgroundColor: "#006cff" }
+                          : undefined
+                      }
+                    >
+                      {entry.text}
+                    </div>
+                  </div>
+                ))}
+
+                {/* 面试官正在输入的提示 */}
+                {isAgentSpeaking && (
+                  <div className="flex items-start gap-2 md:gap-3">
+                    <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
+                      <div className="animate-pulse">
+                        <SparklesIcon size={14} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-muted-foreground text-sm">
+                      <span className="inline-flex">
+                        <span className="animate-bounce [animation-delay:0ms]">.</span>
+                        <span className="animate-bounce [animation-delay:150ms]">.</span>
+                        <span className="animate-bounce [animation-delay:300ms]">.</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 底部控制栏 */}
+      {(status === "connected" || status === "connecting") && (
+        <div className="flex items-center justify-center gap-6 border-t bg-background px-4 py-6">
+          {/* 静音按钮 */}
+          <Button
+            className={`h-14 w-14 rounded-full ${
+              isMuted
+                ? "bg-destructive/10 text-destructive hover:bg-destructive/20"
+                : "bg-muted text-foreground hover:bg-muted/80"
+            }`}
+            onClick={() => setIsMuted(!isMuted)}
+            size="icon"
+            variant="ghost"
+          >
+            {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
+          </Button>
+
+          {/* 挂断按钮 */}
+          <Button
+            className="h-16 w-16 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={handleEndCall}
+            size="icon"
+          >
+            <PhoneOff size={28} />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

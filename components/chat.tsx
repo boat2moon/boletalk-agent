@@ -30,10 +30,10 @@ import { Artifact } from "./artifact";
 import { useDataStream } from "./data-stream-provider";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
-import { getChatHistoryPaginationKey } from "./sidebar-history";
+import { getChatHistoryPaginationKey, type ChatHistory } from "./sidebar-history";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
-import { useVoiceMode } from "./voice-mode-context";
+import { useVoiceMode, type VoiceMode } from "./voice-mode-context";
 import { VoiceServiceStatus } from "./voice-service-status";
 
 export function Chat({
@@ -44,6 +44,9 @@ export function Chat({
   isReadonly,
   autoResume,
   initialLastContext,
+  hideHeader,
+  onHasActiveChatChange,
+  initialChatType,
 }: {
   id: string;
   initialMessages: ChatMessage[];
@@ -52,6 +55,12 @@ export function Chat({
   isReadonly: boolean;
   autoResume: boolean;
   initialLastContext?: AppUsage;
+  /** 由外层 ModeAwareContainer 统一渲染 ChatHeader 时为 true */
+  hideHeader?: boolean;
+  /** 通知父组件“是否有活跃会话”状态变化 */
+  onHasActiveChatChange?: (hasActive: boolean) => void;
+  /** 已有会话的类型，用于 mount 时同步 voiceMode */
+  initialChatType?: string;
 }) {
   const router = useRouter();
 
@@ -61,9 +70,26 @@ export function Chat({
   });
 
   const { mutate } = useSWRConfig();
-  const { voiceMode } = useVoiceMode();
+  const { voiceMode, setVoiceMode } = useVoiceMode();
   const { speakBase64WithCache } = useGlobalSpeechSynthesis();
   const voiceModeRef = useRef(voiceMode);
+
+  // 加载已有会话时，同步 voiceMode 到该会话的 chatType
+  useEffect(() => {
+    if (!initialChatType) return;
+    const modeMap: Record<string, VoiceMode> = {
+      text: "text",
+      voice: "voice",
+      realtime: "realtime",
+      avatar: "avatar",
+    };
+    const target = modeMap[initialChatType];
+    if (target && target !== voiceMode) {
+      setVoiceMode(target);
+    }
+    // 仅在 mount 时执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -92,6 +118,8 @@ export function Chat({
   }, [currentModelId]);
 
   const messagesRef = useRef<ChatMessage[]>(initialMessages);
+  // 标记是否已将新建会话乐观插入侧边栏
+  const hasMutatedSidebar = useRef(initialMessages.length > 0);
 
   const {
     messages,
@@ -124,6 +152,34 @@ export function Chat({
     }),
     onData: (dataPart) => {
       setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+      // 收到服务端推送的 AI 生成标题时，乐观插入侧边栏
+      const part = dataPart as { type: string; data?: unknown };
+      if (part.type === "data-chat-title" && !hasMutatedSidebar.current) {
+        hasMutatedSidebar.current = true;
+        const optimisticChat = {
+          id,
+          title: part.data as string,
+          createdAt: new Date(),
+          userId: "",
+          visibility: initialVisibilityType,
+          chatType: voiceModeRef.current === "voice" ? "voice" : "text",
+          lastContext: null,
+        };
+        const key = unstable_serialize(getChatHistoryPaginationKey);
+        mutate(
+          key,
+          (currentData: ChatHistory[] | undefined) => {
+            if (!currentData || currentData.length === 0) {
+              return [{ chats: [optimisticChat], hasMore: false }] as ChatHistory[];
+            }
+            return [
+              { ...currentData[0], chats: [optimisticChat, ...currentData[0].chats] },
+              ...currentData.slice(1),
+            ] as ChatHistory[];
+          },
+          { revalidate: false }
+        );
+      }
       if (dataPart.type === "data-usage") {
         setUsage(dataPart.data);
       }
@@ -169,6 +225,12 @@ export function Chat({
     messagesRef.current = messages;
   }, [messages]);
 
+  // 通知父组件“是否有活跃会话”的状态变化
+  useEffect(() => {
+    onHasActiveChatChange?.(messages.length > 0);
+  }, [messages.length, onHasActiveChatChange]);
+
+
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
 
@@ -203,12 +265,15 @@ export function Chat({
 
   return (
     <>
-      <div className="overscroll-behavior-contain flex h-dvh min-w-0 touch-pan-y flex-col bg-background">
-        <ChatHeader
-          chatId={id}
-          isReadonly={isReadonly}
-          selectedVisibilityType={initialVisibilityType}
-        />
+      <div className="overscroll-behavior-contain flex min-w-0 flex-1 touch-pan-y flex-col bg-background">
+        {!hideHeader && (
+          <ChatHeader
+            chatId={id}
+            hasActiveChat={messages.length > 0}
+            isReadonly={isReadonly}
+            selectedVisibilityType={initialVisibilityType}
+          />
+        )}
 
         <Messages
           chatId={id}

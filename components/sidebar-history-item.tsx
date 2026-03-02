@@ -26,6 +26,50 @@ import {
   SidebarMenuItem,
 } from "./ui/sidebar";
 
+/** 会话类型标签颜色和文字映射 */
+const CHAT_TYPE_CONFIG: Record<
+  string,
+  { label: string; className: string }
+> = {
+  text: {
+    label: "文本",
+    className:
+      "bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-400",
+  },
+  voice: {
+    label: "语音",
+    className:
+      "bg-green-500/10 text-green-600 dark:bg-green-400/10 dark:text-green-400",
+  },
+  realtime: {
+    label: "电话",
+    className:
+      "bg-purple-500/10 text-purple-600 dark:bg-purple-400/10 dark:text-purple-400",
+  },
+  avatar: {
+    label: "视频",
+    className:
+      "bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400",
+  },
+};
+
+function ChatTypeBadge({
+  chatType,
+}: {
+  chatType: string;
+}) {
+  const config = CHAT_TYPE_CONFIG[chatType];
+  if (!config) return null;
+
+  return (
+    <span
+      className={`shrink-0 rounded px-1 py-0.5 font-medium text-[10px] leading-none ${config.className}`}
+    >
+      {config.label}
+    </span>
+  );
+}
+
 const PureChatItem = ({
   chat,
   isActive,
@@ -46,7 +90,8 @@ const PureChatItem = ({
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
         <Link href={`/chat/${chat.id}`} onClick={() => setOpenMobile(false)}>
-          <span>{chat.title}</span>
+          <span className="flex-1 truncate">{chat.title}</span>
+          <ChatTypeBadge chatType={chat.chatType} />
         </Link>
       </SidebarMenuButton>
 

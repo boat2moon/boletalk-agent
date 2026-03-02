@@ -1,6 +1,7 @@
 "use client";
 
 import { LockIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { memo, useEffect, useRef, useState } from "react";
 import {
   Tooltip,
@@ -20,17 +21,20 @@ type ModeOption = {
 const MODE_OPTIONS: ModeOption[] = [
   { value: "text", label: "纯文本", shortLabel: "文本" },
   { value: "voice", label: "基础语音", shortLabel: "语音" },
-  { value: "realtime", label: "高级语音", shortLabel: "高级", disabled: true },
-  { value: "avatar", label: "数字人", shortLabel: "数字人", disabled: true },
+  { value: "realtime", label: "电话面试", shortLabel: "电话" },
+  { value: "avatar", label: "视频面试", shortLabel: "视频", disabled: true },
 ];
 
-function PureModeSelector() {
+function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
   const { voiceMode, setVoiceMode } = useVoiceMode();
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<{
     left: number;
     width: number;
   }>({ left: 0, width: 0 });
+  // 首次渲染时跳过动画，直接定位到正确位置
+  const [enableTransition, setEnableTransition] = useState(false);
 
   // 计算滑动指示器的位置
   useEffect(() => {
@@ -59,6 +63,14 @@ function PureModeSelector() {
       width: activeBtn.offsetWidth,
     });
   }, [voiceMode]);
+
+  // 首帧渲染完成后启用过渡动画
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      setEnableTransition(true);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   // 窗口 resize 时重算位置
   useEffect(() => {
@@ -93,7 +105,9 @@ function PureModeSelector() {
     >
       {/* 滑动背景指示器 */}
       <div
-        className="absolute top-1 bottom-1 rounded-lg bg-background shadow-md ring-1 ring-border/50 transition-all duration-300 ease-in-out"
+        className={`absolute top-1 bottom-1 rounded-lg shadow-sm ease-in-out bg-[#2979ff]/40 dark:bg-[#00e676]/20 ${
+          enableTransition ? "transition-all duration-300" : ""
+        }`}
         style={{
           left: `${indicatorStyle.left}px`,
           width: `${indicatorStyle.width}px`,
@@ -102,22 +116,33 @@ function PureModeSelector() {
 
       {MODE_OPTIONS.map((option) => {
         const isActive = voiceMode === option.value;
+        // 功能尚未上线的模式
+        const isComingSoon = option.disabled;
+        // 有活跃会话且非当前模式 → 点击将新建会话
+        const isNewChatAction = hasActiveChat && !isActive && !isComingSoon;
 
         const button = (
           <button
             className={`relative z-10 flex items-center gap-1 rounded-lg px-3 py-1.5 font-medium text-sm transition-colors duration-200 ${
               isActive
                 ? "text-foreground"
-                : option.disabled
+                : isComingSoon
                   ? "cursor-not-allowed text-muted-foreground/40"
-                  : "cursor-pointer text-muted-foreground hover:text-foreground/70"
+                  : isNewChatAction
+                    ? "cursor-pointer text-muted-foreground hover:text-foreground/70"
+                    : "cursor-pointer text-muted-foreground hover:text-foreground/70"
             }
             `}
             data-mode-btn
-            disabled={option.disabled}
+            disabled={isComingSoon}
             key={option.value}
             onClick={() => {
-              if (!option.disabled) {
+              if (isComingSoon) return;
+              if (isNewChatAction) {
+                // 先切换模式触发滑动动画，延迟跳转让动画播放完
+                setVoiceMode(option.value);
+                setTimeout(() => router.push("/chat"), 300);
+              } else if (!isActive) {
                 setVoiceMode(option.value);
               }
             }}
@@ -125,17 +150,32 @@ function PureModeSelector() {
           >
             <span className="hidden sm:inline">{option.label}</span>
             <span className="sm:hidden">{option.shortLabel}</span>
-            {option.disabled && <LockIcon className="opacity-50" size={10} />}
+            {isComingSoon && <LockIcon className="opacity-50" size={10} />}
           </button>
         );
 
-        if (option.disabled) {
+        // 功能尚未上线的 tooltip
+        if (isComingSoon) {
           return (
             <TooltipProvider delayDuration={0} key={option.value}>
               <Tooltip>
                 <TooltipTrigger asChild>{button}</TooltipTrigger>
-                <TooltipContent side="bottom">
+                <TooltipContent className="z-100 bg-zinc-800 text-white border-zinc-700" side="bottom">
                   <p>即将推出</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+
+        // 有活跃会话时提示"新建XX会话"
+        if (isNewChatAction) {
+          return (
+            <TooltipProvider delayDuration={0} key={option.value}>
+              <Tooltip>
+                <TooltipTrigger asChild>{button}</TooltipTrigger>
+                <TooltipContent className="z-100 bg-zinc-800 text-white border-zinc-700" side="bottom">
+                  <p>新建{option.label}会话</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

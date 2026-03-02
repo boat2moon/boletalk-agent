@@ -32,6 +32,8 @@ export type CreateChatStreamOptions = {
   session: Session;
   /** 是否为语音模式（为 true 时服务端会做 TTS 并推送音频） */
   voiceMode?: boolean;
+  /** 新建会话时 AI 生成的标题，会在流开始时推送给前端 */
+  chatTitle?: string;
   /** 外层回调：stream 完成后保存消息和 usage */
   onFinish?: (params: { messages: ChatMessage[]; usage?: AppUsage }) => void;
 };
@@ -42,12 +44,21 @@ export function createChatStream({
   requestHints,
   session,
   voiceMode,
+  chatTitle,
   onFinish,
 }: CreateChatStreamOptions) {
   let finalMergedUsage: AppUsage | undefined;
 
   const stream = createUIMessageStream({
     execute: async ({ writer: dataStream }) => {
+      // 新建会话时，先推送标题给前端以便乐观更新侧边栏
+      if (chatTitle) {
+        dataStream.write({
+          type: "data-chat-title",
+          data: chatTitle,
+        });
+      }
+
       const classification = await classifyMessages(messages);
 
       let result:

@@ -19,8 +19,8 @@ const NEW_CHAT_MODES: {
 }[] = [
   { value: "text", label: "纯文本" },
   { value: "voice", label: "基础语音" },
-  { value: "realtime", label: "高级语音", disabled: true },
-  { value: "avatar", label: "数字人面试官", disabled: true },
+  { value: "realtime", label: "电话面试" },
+  { value: "avatar", label: "视频面试", disabled: true },
 ];
 
 export function NewChatDropdown({

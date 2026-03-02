@@ -19,7 +19,7 @@ export const chatModels: ChatModel[] = [
   },
   {
     id: "chat-model-glm",
-    name: "GLM-4-Flash（免费）",
-    description: "智谱 GLM-4-Flash 免费模型",
+    name: "GLM-4-Air",
+    description: "智谱 GLM-4-Air 高性价比模型",
   },
 ];

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
+import { ModeAwareContainer } from "@/components/mode-aware-container";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { generateUUID } from "@/lib/utils";
 
@@ -20,34 +21,25 @@ async function NewChatPage() {
   const modelIdFromCookie = cookieStore.get("chat-model");
   const id = generateUUID();
 
-  if (!modelIdFromCookie) {
-    return (
-      <>
+  const chatModel = modelIdFromCookie?.value || DEFAULT_CHAT_MODEL;
+
+  return (
+    <>
+      <ModeAwareContainer
+        chatId={id}
+        isReadonly={false}
+        selectedVisibilityType="private"
+      >
         <Chat
           autoResume={false}
           id={id}
-          initialChatModel={DEFAULT_CHAT_MODEL}
+          initialChatModel={chatModel}
           initialMessages={[]}
           initialVisibilityType="private"
           isReadonly={false}
           key={id}
         />
-        <DataStreamHandler />
-      </>
-    );
-  }
-
-  return (
-    <>
-      <Chat
-        autoResume={false}
-        id={id}
-        initialChatModel={modelIdFromCookie.value}
-        initialMessages={[]}
-        initialVisibilityType="private"
-        isReadonly={false}
-        key={id}
-      />
+      </ModeAwareContainer>
       <DataStreamHandler />
     </>
   );

@@ -17,10 +17,12 @@ function PureChatHeader({
   chatId,
   selectedVisibilityType,
   isReadonly,
+  hasActiveChat,
 }: {
   chatId: string;
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
+  hasActiveChat?: boolean;
 }) {
   const router = useRouter();
   const { open } = useSidebar();
@@ -59,7 +61,7 @@ function PureChatHeader({
       {/* 模式选择器（与下方对话区域居中对齐） */}
       <div className="pointer-events-none absolute inset-0 hidden items-center justify-center md:flex">
         <div className="pointer-events-auto">
-          <ModeSelector />
+          <ModeSelector hasActiveChat={hasActiveChat} />
         </div>
       </div>
 
@@ -82,6 +84,7 @@ export const ChatHeader = memo(PureChatHeader, (prevProps, nextProps) => {
   return (
     prevProps.chatId === nextProps.chatId &&
     prevProps.selectedVisibilityType === nextProps.selectedVisibilityType &&
-    prevProps.isReadonly === nextProps.isReadonly
+    prevProps.isReadonly === nextProps.isReadonly &&
+    prevProps.hasActiveChat === nextProps.hasActiveChat
   );
 });
