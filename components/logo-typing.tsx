@@ -16,19 +16,7 @@ export function LogoTyping() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
 
-    if (!isDeleting) {
-      // 打字阶段
-      if (displayText.length < FULL_TEXT.length) {
-        timer = setTimeout(() => {
-          setDisplayText(FULL_TEXT.slice(0, displayText.length + 1));
-        }, TYPING_SPEED);
-      } else {
-        // 打完了，停顿后开始删除
-        timer = setTimeout(() => {
-          setIsDeleting(true);
-        }, PAUSE_AFTER_TYPE);
-      }
-    } else {
+    if (isDeleting) {
       // 删除阶段
       if (displayText.length > 0) {
         timer = setTimeout(() => {
@@ -40,6 +28,16 @@ export function LogoTyping() {
           setIsDeleting(false);
         }, PAUSE_AFTER_DELETE);
       }
+    } else if (displayText.length < FULL_TEXT.length) {
+      // 打字阶段
+      timer = setTimeout(() => {
+        setDisplayText(FULL_TEXT.slice(0, displayText.length + 1));
+      }, TYPING_SPEED);
+    } else {
+      // 打完了，停顿后开始删除
+      timer = setTimeout(() => {
+        setIsDeleting(true);
+      }, PAUSE_AFTER_TYPE);
     }
 
     return () => clearTimeout(timer);
@@ -51,11 +49,9 @@ export function LogoTyping() {
         <div className="absolute inset-0 rounded-full bg-blue-500/10 blur-3xl" />
         <BoleTalkIcon className="relative size-20 text-blue-600/90 drop-shadow-lg md:size-24" />
       </div>
-      <span className="font-bold text-3xl tracking-tight text-blue-600/90 md:text-4xl">
+      <span className="font-bold text-3xl text-blue-600/90 tracking-tight md:text-4xl">
         {displayText}
-        <span className="ml-0.5 animate-pulse">
-          |
-        </span>
+        <span className="ml-0.5 animate-pulse">|</span>
       </span>
     </div>
   );
