@@ -23,6 +23,7 @@ import type { AppUsage } from "@/lib/usage";
 
 export type CreateMockInterviewStreamOptions = {
   messages: ChatMessage[];
+  voiceMode?: boolean;
   /** 数据流写入器，用于推送 usage 和 tool 结果 */
   dataStream: UIMessageStreamWriter<ChatMessage>;
   /** 可选回调，usage 计算完成时通知外层 */
@@ -41,10 +42,11 @@ export type CreateMockInterviewStreamOptions = {
  */
 export function createMockInterviewStream({
   messages,
+  voiceMode,
   dataStream,
   onUsageUpdate,
 }: CreateMockInterviewStreamOptions) {
-  const systemPrompt = `你是一个专业的程序员面试官，擅长前端技术栈，包括 HTML、CSS、JavaScript、TypeScript、React、Vue、Node.js、小程序等技术。
+  let systemPrompt = `你是一个专业的程序员面试官，擅长前端技术栈，包括 HTML、CSS、JavaScript、TypeScript、React、Vue、Node.js、小程序等技术。
 
 你的任务是进行模拟面试，帮助用户准备真实的面试场景。
 
@@ -74,6 +76,11 @@ export function createMockInterviewStream({
 - 项目介绍时，最重要的是能让人听懂看懂这是个什么项目、什么功能，不要一开始就深入细节，这样会很乱
 - 项目挑战和难点，可使用 STAR 模板来讲，这样才够清晰明了
 - 项目性能优化，最好能有具体的例子和量化指标`;
+
+  if (voiceMode) {
+    systemPrompt +=
+      "\n\n[语音模式特殊要求]：用户正在通过语音与你交流。你的回答必须口语化、简洁自然，就像面对面聊天一样。请绝对避免生成复杂的 Markdown 格式（如长列表、表格、代码块等），尽量用纯文本交流。直接给结论，不要超过 3-5 句。";
+  }
 
   const model = myProvider.languageModel("chat-model");
 

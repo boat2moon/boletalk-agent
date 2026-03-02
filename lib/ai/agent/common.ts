@@ -138,6 +138,7 @@ export type CreateDefaultStreamOptions = {
   selectedChatModel: ChatModel["id"];
   requestHints: RequestHints;
   session: Session;
+  voiceMode?: boolean;
   dataStream: UIMessageStreamWriter<ChatMessage>;
   /** 可选回调，usage 计算完成时通知外层 */
   onUsageUpdate?: (usage: AppUsage) => void;
@@ -158,12 +159,13 @@ export function createDefaultStream({
   requestHints,
   // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for future use when tools are re-enabled
   session,
+  voiceMode,
   dataStream,
   onUsageUpdate,
 }: CreateDefaultStreamOptions) {
   return streamText({
     model: myProvider.languageModel(selectedChatModel),
-    system: systemPrompt({ selectedChatModel, requestHints }),
+    system: systemPrompt({ selectedChatModel, requestHints, voiceMode }),
     messages: convertToModelMessages(messages),
     stopWhen: stepCountIs(5),
     experimental_activeTools:

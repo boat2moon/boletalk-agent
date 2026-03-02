@@ -1,12 +1,21 @@
 import equal from "fast-deep-equal";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { useCopyToClipboard } from "usehooks-ts";
+import { useGlobalSpeechSynthesis } from "@/components/speech-synthesis-provider";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { Action, Actions } from "./elements/actions";
-import { CopyIcon, PencilEditIcon, ThumbDownIcon, ThumbUpIcon } from "./icons";
+import {
+  CopyIcon,
+  PencilEditIcon,
+  ThumbDownIcon,
+  ThumbUpIcon,
+  Volume2Icon,
+  VolumeXIcon,
+} from "./icons";
+import { useVoiceMode } from "./voice-mode-context";
 
 export function PureMessageActions({
   chatId,
@@ -23,6 +32,12 @@ export function PureMessageActions({
 }) {
   const { mutate } = useSWRConfig();
   const [_, copyToClipboard] = useCopyToClipboard();
+  const { speak, pause, resume, isSpeaking, playFromCache, hasCache } =
+    useGlobalSpeechSynthesis();
+  const { voiceMode } = useVoiceMode();
+
+  // 增加一个本地状态来跟踪当前消息是否处于“被选中朗读且暂停”的状态
+  const [isPaused, setIsPaused] = useState(false);
 
   if (isLoading) {
     return null;
@@ -42,6 +57,26 @@ export function PureMessageActions({
 
     await copyToClipboard(textFromParts);
     toast.success("Copied to clipboard!");
+  };
+
+  const handleSpeak = () => {
+    if (isSpeaking) {
+      // 正在播放 → 暂停
+      pause();
+      setIsPaused(true);
+    } else if (isPaused) {
+      // 暂停中 → 恢复
+      resume();
+      setIsPaused(false);
+    } else {
+      // 全新播放：优先从缓存重播，没有缓存才发请求
+      if (hasCache(message.id)) {
+        playFromCache(message.id);
+      } else if (textFromParts) {
+        speak(textFromParts);
+      }
+      setIsPaused(false);
+    }
   };
 
   // User messages get edit (on hover) and copy actions
@@ -72,6 +107,16 @@ export function PureMessageActions({
       <Action onClick={handleCopy} tooltip="Copy">
         <CopyIcon />
       </Action>
+
+      {voiceMode === "voice" && (
+        <Action
+          data-testid="message-speak"
+          onClick={handleSpeak}
+          tooltip={isSpeaking ? "暂停朗读" : isPaused ? "继续朗读" : "朗读"}
+        >
+          {isSpeaking ? <VolumeXIcon /> : <Volume2Icon />}
+        </Action>
+      )}
 
       <Action
         data-testid="message-upvote"

@@ -9,8 +9,7 @@
  *    - mock_interview → 模拟面试 agent
  *    - 其他 → 默认的通用 agent
  * 3. 将 agent 生成的 stream 合并到 UI 消息流中返回给前端
- *
- * 这种"分类 → 分发"的模式是典型的顺序工作流（Sequential Workflow）
+ * 4. 如果 voiceMode=true，LLM 完成后服务端分段调 TTS，音频通过 dataStream 推送
  */
 
 import { createUIMessageStream } from "ai";
@@ -21,6 +20,7 @@ import { createMockInterviewStream } from "@/lib/ai/agent/mock-interview";
 import { createResumeOptStream } from "@/lib/ai/agent/resume-opt";
 import type { ChatModel } from "@/lib/ai/models";
 import type { RequestHints } from "@/lib/ai/prompts";
+import { synthesizeSpeech } from "@/lib/ai/tts";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { generateUUID } from "@/lib/utils";
@@ -30,72 +30,56 @@ export type CreateChatStreamOptions = {
   selectedChatModel: ChatModel["id"];
   requestHints: RequestHints;
   session: Session;
+  /** 是否为语音模式（为 true 时服务端会做 TTS 并推送音频） */
+  voiceMode?: boolean;
   /** 外层回调：stream 完成后保存消息和 usage */
   onFinish?: (params: { messages: ChatMessage[]; usage?: AppUsage }) => void;
 };
 
-/**
- * 创建聊天 stream —— Agent 工作流的入口函数
- *
- * 被 route.ts 调用，返回一个 UI 消息流。
- * 内部实现了"分类 → 分发"的工作流：
- *
- * ```
- * 用户消息 → classifyMessages(分类) → 根据结果选择 agent → 返回 stream
- *                                        ├─ resume_opt → createResumeOptStream
- *                                        ├─ mock_interview → createMockInterviewStream
- *                                        └─ others → createDefaultStream
- * ```
- */
 export function createChatStream({
   messages,
   selectedChatModel,
   requestHints,
   session,
+  voiceMode,
   onFinish,
 }: CreateChatStreamOptions) {
-  // 用于在 execute 和 onFinish 之间传递 usage 数据
   let finalMergedUsage: AppUsage | undefined;
 
   const stream = createUIMessageStream({
-    // execute 是异步的，因为需要先分类再决定用哪个 agent
     execute: async ({ writer: dataStream }) => {
-      // ========== 第一步：消息分类 ==========
-      // 调用 classify agent，获取结构化的分类结果
       const classification = await classifyMessages(messages);
-      // console.log("classification => ", classification);
 
       let result:
         | ReturnType<typeof createResumeOptStream>
         | ReturnType<typeof createMockInterviewStream>
         | ReturnType<typeof createDefaultStream>;
 
-      // ========== 第二步：根据分类结果选择不同的 agent ==========
       if (classification.resume_opt) {
-        // 简历优化 → 使用专门的简历优化 agent
         result = createResumeOptStream({
           messages,
+          voiceMode,
           dataStream,
           onUsageUpdate: (usage) => {
             finalMergedUsage = usage;
           },
         });
       } else if (classification.mock_interview) {
-        // 模拟面试 → 使用专门的模拟面试 agent
         result = createMockInterviewStream({
           messages,
+          voiceMode,
           dataStream,
           onUsageUpdate: (usage) => {
             finalMergedUsage = usage;
           },
         });
       } else {
-        // 其他情况 → 使用默认的通用 agent（原有的 streamText 逻辑）
         result = createDefaultStream({
           messages,
           selectedChatModel,
           requestHints,
           session,
+          voiceMode,
           dataStream,
           onUsageUpdate: (usage) => {
             finalMergedUsage = usage;
@@ -103,17 +87,141 @@ export function createChatStream({
         });
       }
 
-      // ========== 第三步：消费 stream 并合并到 UI 消息流 ==========
       result.consumeStream();
 
-      dataStream.merge(
-        result.toUIMessageStream({
-          sendReasoning: true,
-        })
-      );
+      const uiStream = result.toUIMessageStream({
+        sendReasoning: true,
+      });
+
+      if (voiceMode) {
+        // ========== 语音模式：延迟文本流直到第一段 TTS 首包准备完毕 ==========
+        let delayedController!: ReadableStreamDefaultController<any>;
+        const delayedStream = new ReadableStream({
+          start(controller) {
+            delayedController = controller;
+          },
+        });
+
+        dataStream.merge(delayedStream);
+
+        let isFirstTtsReady = false;
+        let textBuffer: any[] = [];
+
+        // 独立异步读取文本流（防阻断 LLM 生成）
+        const pipeProcess = async () => {
+          const reader = uiStream.getReader();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) {
+                if (!isFirstTtsReady) {
+                  isFirstTtsReady = true;
+                  for (const c of textBuffer) {
+                    delayedController.enqueue(c);
+                  }
+                  textBuffer = [];
+                }
+                delayedController.close();
+                break;
+              }
+
+              if (isFirstTtsReady) {
+                delayedController.enqueue(value);
+              } else {
+                textBuffer.push(value);
+              }
+            }
+          } catch (error) {
+            delayedController.error(error);
+          }
+        };
+        pipeProcess();
+
+        // 实时边检边 TTS
+        // biome-ignore lint/performance/useTopLevelRegex: regex used inside stream callback
+        const SENTENCE_END = /[。！？!?.\n]/;
+        const MIN_CHUNK_SIZE = 200;
+        let accumulated = "";
+
+        for await (const delta of result.textStream) {
+          accumulated += delta;
+
+          let shouldTriggerTTS = false;
+          let chunkToPlay = "";
+
+          // 1. 找最后一个句子边界
+          let lastBoundary = -1;
+          for (let i = 0; i < accumulated.length; i++) {
+            if (SENTENCE_END.test(accumulated[i])) {
+              lastBoundary = i;
+            }
+          }
+
+          if (lastBoundary >= 0) {
+            // 有边界，不管多长都切掉
+            chunkToPlay = accumulated.slice(0, lastBoundary + 1).trim();
+            accumulated = accumulated.slice(lastBoundary + 1);
+            shouldTriggerTTS = true;
+          } else if (accumulated.length >= MIN_CHUNK_SIZE) {
+            // 2. 超长无边界，强制切断
+            chunkToPlay = accumulated.trim();
+            accumulated = "";
+            shouldTriggerTTS = true;
+          }
+
+          if (shouldTriggerTTS && chunkToPlay) {
+            const ttsResult = await synthesizeSpeech(chunkToPlay);
+            if (ttsResult) {
+              // 推送第一段语音给前端
+              dataStream.write({
+                type: "data-ttsAudio",
+                data: ttsResult,
+              });
+
+              // 然后再放行文本流（解决不同步感）
+              if (!isFirstTtsReady) {
+                isFirstTtsReady = true;
+                for (const c of textBuffer) {
+                  delayedController.enqueue(c);
+                }
+                textBuffer = [];
+              }
+            }
+          }
+        }
+
+        // LLM 输出结束，处理剩余文本
+        if (accumulated.trim()) {
+          const ttsResult = await synthesizeSpeech(accumulated.trim());
+          if (ttsResult) {
+            dataStream.write({
+              type: "data-ttsAudio",
+              data: ttsResult,
+            });
+
+            if (!isFirstTtsReady) {
+              isFirstTtsReady = true;
+              for (const c of textBuffer) {
+                delayedController.enqueue(c);
+              }
+              textBuffer = [];
+            }
+          }
+        }
+
+        // 兜底放行
+        if (!isFirstTtsReady) {
+          isFirstTtsReady = true;
+          for (const c of textBuffer) {
+            delayedController.enqueue(c);
+          }
+          textBuffer = [];
+        }
+      } else {
+        dataStream.merge(uiStream);
+      }
     },
     generateId: generateUUID,
-    // stream 完成后的回调：将完成的消息和 usage 传递给外层（route.ts）保存
     onFinish: async ({ messages: finishedMessages }) => {
       if (onFinish) {
         await onFinish({

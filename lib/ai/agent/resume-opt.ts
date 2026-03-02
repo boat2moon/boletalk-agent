@@ -24,6 +24,7 @@ import type { AppUsage } from "@/lib/usage";
 
 export type CreateResumeOptStreamOptions = {
   messages: ChatMessage[];
+  voiceMode?: boolean;
   /** 数据流写入器，用于推送 usage 和 tool 结果 */
   dataStream: UIMessageStreamWriter<ChatMessage>;
   /** 可选回调，usage 计算完成时通知外层 */
@@ -43,10 +44,11 @@ export type CreateResumeOptStreamOptions = {
  */
 export function createResumeOptStream({
   messages,
+  voiceMode,
   dataStream,
   onUsageUpdate,
 }: CreateResumeOptStreamOptions) {
-  const systemPrompt = `你的角色是：资深程序员 + 简历优化专家，最擅长程序员简历的评审和优化。
+  let systemPrompt = `你的角色是：资深程序员 + 简历优化专家，最擅长程序员简历的评审和优化。
 
 请根据用户的消息内容，判断用户是否已经提供了简历内容：
 
@@ -85,6 +87,11 @@ export function createResumeOptStream({
     - 不足
    - 然后给出具体的修改建议
 `;
+
+  if (voiceMode) {
+    systemPrompt +=
+      "\n\n[语音模式特殊要求]：用户正在通过语音与你交流。你的回答必须口语化、简洁自然，就像面对面聊天一样。请绝对避免生成复杂的 Markdown 格式（如长列表、表格、代码块等），尽量用纯文本交流。直接给结论，不要超过 3-5 句。";
+  }
 
   const model = myProvider.languageModel("chat-model");
 

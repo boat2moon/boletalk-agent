@@ -7,9 +7,11 @@ import { memo } from "react";
 import { useWindowSize } from "usehooks-ts";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { Button } from "@/components/ui/button";
-import { PlusIcon } from "./icons";
+import { ModeSelector } from "./mode-selector";
+import { NewChatDropdown } from "./new-chat-dropdown";
 import { useSidebar } from "./ui/sidebar";
 import { VisibilitySelector, type VisibilityType } from "./visibility-selector";
+import { useVoiceMode } from "./voice-mode-context";
 
 function PureChatHeader({
   chatId,
@@ -22,6 +24,7 @@ function PureChatHeader({
 }) {
   const router = useRouter();
   const { open } = useSidebar();
+  const { setVoiceMode } = useVoiceMode();
   const { setTheme, resolvedTheme } = useTheme();
 
   const { width: windowWidth } = useWindowSize();
@@ -31,20 +34,18 @@ function PureChatHeader({
       <SidebarToggle />
 
       {(!open || windowWidth < 768) && (
-        <Button
-          className="order-2 ml-auto h-8 px-2 md:order-1 md:ml-0 md:h-fit md:px-2"
-          onClick={() => {
-            // 新建聊天时重置模型为默认的 GLM
-            // biome-ignore lint/suspicious/noDocumentCookie: intentional client-side cookie for model reset
-            document.cookie = `chat-model=chat-model-glm; path=/; max-age=${60 * 60 * 24 * 365}`;
-            router.push("/");
-            router.refresh();
-          }}
-          variant="outline"
-        >
-          <PlusIcon />
-          <span className="md:sr-only">New Chat</span>
-        </Button>
+        <div className="order-2 ml-auto md:order-1 md:ml-0">
+          <NewChatDropdown
+            className="h-8 px-2 md:h-fit md:px-2"
+            onNewChat={(mode) => {
+              setVoiceMode(mode);
+              // biome-ignore lint/suspicious/noDocumentCookie: intentional client-side cookie for model reset
+              document.cookie = `chat-model=chat-model-glm; path=/; max-age=${60 * 60 * 24 * 365}`;
+              router.push("/chat");
+              router.refresh();
+            }}
+          />
+        </div>
       )}
 
       {!isReadonly && (
@@ -55,8 +56,15 @@ function PureChatHeader({
         />
       )}
 
+      {/* 模式选择器（与下方对话区域居中对齐） */}
+      <div className="pointer-events-none absolute inset-0 hidden items-center justify-center md:flex">
+        <div className="pointer-events-auto">
+          <ModeSelector />
+        </div>
+      </div>
+
       <Button
-        className="order-3 hidden cursor-pointer md:ml-auto md:flex md:h-fit"
+        className="order-4 ml-auto hidden cursor-pointer md:flex md:h-fit"
         onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
         variant="outline"
       >

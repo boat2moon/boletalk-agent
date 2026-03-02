@@ -28,6 +28,7 @@ export const postRequestBodySchema = z.object({
     "chat-model-glm",
   ]),
   selectedVisibilityType: z.enum(["public", "private"]),
+  voiceMode: z.boolean().optional(),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;

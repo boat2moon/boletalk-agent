@@ -51,6 +51,12 @@ export type CustomUIDataTypes = {
   clear: null;
   finish: null;
   usage: AppUsage;
+  ttsAudio: {
+    audioBase64: string;
+    mimeType: string;
+    provider: string;
+    degraded: string[];
+  };
 };
 
 export type ChatMessage = UIMessage<
