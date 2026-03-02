@@ -7,7 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
-import { PlusIcon, TrashIcon } from "@/components/icons";
+import { TrashIcon } from "@/components/icons";
 import { BoleTalkIcon } from "@/components/icons/boletalk-icon";
 import {
   getChatHistoryPaginationKey,
@@ -23,6 +23,7 @@ import {
   SidebarMenu,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { NewChatDropdown } from "./new-chat-dropdown";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,8 +35,10 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { useVoiceMode } from "./voice-mode-context";
 
 export function AppSidebar({ user }: { user: User | undefined }) {
+  const { setVoiceMode } = useVoiceMode();
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
   const { mutate } = useSWRConfig();
@@ -94,28 +97,17 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                     </TooltipContent>
                   </Tooltip>
                 )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      className="h-8 p-1 md:h-fit md:p-2"
-                      onClick={() => {
-                        setOpenMobile(false);
-                        // 新建聊天时重置模型为默认的 GLM
-                        // biome-ignore lint/suspicious/noDocumentCookie: intentional client-side cookie for model reset
-                        document.cookie = `chat-model=chat-model-glm; path=/; max-age=${60 * 60 * 24 * 365}`;
-                        router.push("/chat");
-                        router.refresh();
-                      }}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <PlusIcon />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent align="end" className="hidden md:block">
-                    New Chat
-                  </TooltipContent>
-                </Tooltip>
+                <NewChatDropdown
+                  onNewChat={(mode) => {
+                    setOpenMobile(false);
+                    setVoiceMode(mode);
+                    // 新建聊天时重置模型为默认的 GLM
+                    // biome-ignore lint/suspicious/noDocumentCookie: intentional client-side cookie for model reset
+                    document.cookie = `chat-model=chat-model-glm; path=/; max-age=${60 * 60 * 24 * 365}`;
+                    router.push("/chat");
+                    router.refresh();
+                  }}
+                />
               </div>
             </div>
           </SidebarMenu>

@@ -119,7 +119,13 @@ const PurePreviewMessage = ({
             if (type === "text") {
               if (mode === "view") {
                 return (
-                  <div key={key}>
+                  <div
+                    className={cn({
+                      "streaming-text":
+                        isLoading && message.role === "assistant",
+                    })}
+                    key={key}
+                  >
                     <MessageContent
                       className={cn({
                         "wrap-break-word w-fit rounded-2xl px-3 py-2 text-right text-white":

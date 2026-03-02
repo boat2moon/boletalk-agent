@@ -49,6 +49,8 @@ const THEME_COLOR_SCRIPT = `\
   updateThemeColor();
 })();`;
 
+import { SpeechSynthesisProvider } from "@/components/speech-synthesis-provider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -81,7 +83,9 @@ export default function RootLayout({
           enableSystem
         >
           <Toaster position="top-center" />
-          <SessionProvider>{children}</SessionProvider>
+          <SessionProvider>
+            <SpeechSynthesisProvider>{children}</SpeechSynthesisProvider>
+          </SessionProvider>
         </ThemeProvider>
       </body>
 

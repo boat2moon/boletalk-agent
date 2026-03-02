@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import { SelectItem } from "@/components/ui/select";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { chatModels } from "@/lib/ai/models";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ import {
   ArrowUpIcon,
   ChevronDownIcon,
   CpuIcon,
+  MicIcon,
   PaperclipIcon,
   StopIcon,
 } from "./icons";
@@ -41,6 +43,8 @@ import { PreviewAttachment } from "./preview-attachment";
 import { SuggestedActions } from "./suggested-actions";
 import { Button } from "./ui/button";
 import type { VisibilityType } from "./visibility-selector";
+import { useVoiceHealth } from "./voice-health-context";
+import { useVoiceMode } from "./voice-mode-context";
 
 // 将文件读取为 base64 字符串的工具函数
 // 使用 FileReader API 将文件转换为 Data URL，然后提取 base64 部分
@@ -94,6 +98,64 @@ function PureMultimodalInput({
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
+  const { voiceMode } = useVoiceMode();
+  const { isTtsDown, isSttDown } = useVoiceHealth();
+  const {
+    startListening,
+    stopListening,
+    cancelListening,
+    isListening,
+    isProcessing,
+  } = useSpeechRecognition();
+
+  // 语音不可用时阻止录音
+  const voiceUnavailable = isTtsDown || isSttDown;
+
+  // 语音模式：长按录音处理
+  const handleVoiceStart = useCallback(() => {
+    if (status !== "ready") {
+      return;
+    }
+    if (voiceUnavailable) {
+      toast.error("语音服务暂时不可用，请联系管理员或稍后重试");
+      return;
+    }
+    startListening();
+  }, [status, startListening, voiceUnavailable]);
+
+  const handleVoiceEnd = useCallback(async () => {
+    if (!isListening) {
+      return;
+    }
+    const text = await stopListening();
+    if (text.trim()) {
+      // 自动发送识别出的文字
+      window.history.pushState({}, "", `/chat/${chatId}`);
+      sendMessage({
+        role: "user",
+        parts: [
+          ...attachments.map((attachment) => ({
+            type: "file" as const,
+            url: attachment.url,
+            base64: attachment.base64,
+            name: attachment.name,
+            mediaType: attachment.contentType,
+          })),
+          { type: "text", text },
+        ],
+      });
+      setAttachments([]);
+    } else {
+      toast.error("未识别到语音内容，请重试");
+    }
+  }, [
+    isListening,
+    stopListening,
+    chatId,
+    sendMessage,
+    attachments,
+    setAttachments,
+  ]);
 
   const adjustHeight = useCallback(() => {
     if (textareaRef.current) {
@@ -331,94 +393,192 @@ function PureMultimodalInput({
         type="file"
       />
 
-      <PromptInput
-        className="rounded-xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (status !== "ready") {
-            toast.error("Please wait for the model to finish its response!");
-          } else {
-            submitForm();
-          }
-        }}
-      >
-        {(attachments.length > 0 || uploadQueue.length > 0) && (
-          <div
-            className="flex flex-row items-end gap-2 overflow-x-scroll"
-            data-testid="attachments-preview"
-          >
-            {attachments.map((attachment) => (
-              <PreviewAttachment
-                attachment={attachment}
-                key={attachment.url}
-                onRemove={() => {
-                  setAttachments((currentAttachments) =>
-                    currentAttachments.filter((a) => a.url !== attachment.url)
-                  );
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = "";
-                  }
-                }}
-              />
-            ))}
-
-            {uploadQueue.map((filename) => (
-              <PreviewAttachment
-                attachment={{
-                  url: "",
-                  name: filename,
-                  contentType: "",
-                }}
-                isUploading={true}
-                key={filename}
-              />
-            ))}
-          </div>
-        )}
-        <div className="flex flex-row items-start gap-1 sm:gap-2">
-          <PromptInputTextarea
-            autoFocus
-            className="grow resize-none border-0! border-none! bg-transparent p-2 text-sm outline-none ring-0 [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden"
-            data-testid="multimodal-input"
-            disableAutoResize={true}
-            maxHeight={200}
-            minHeight={44}
-            onChange={handleInput}
-            placeholder="输入消息..."
-            ref={textareaRef}
-            rows={1}
-            value={input}
-          />{" "}
-          <ApiCallUsage refreshKey={refreshKey} />
-        </div>
-        <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
-          <PromptInputTools className="gap-0 sm:gap-0.5">
-            {/* PDF 附件上传按钮 */}
-            <AttachmentsButton
-              fileInputRef={fileInputRef}
-              selectedModelId={selectedModelId}
-              status={status}
-            />
-            <ModelSelectorCompact
-              onModelChange={onModelChange}
-              selectedModelId={selectedModelId}
-            />
-          </PromptInputTools>
-
-          {status === "submitted" ? (
-            <StopButton setMessages={setMessages} stop={stop} />
-          ) : (
-            <PromptInputSubmit
-              className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
-              data-testid="send-button"
-              disabled={!input.trim() || uploadQueue.length > 0}
-              status={status}
+      {/* 语音模式：长按录音按钮 */}
+      {voiceMode === "voice" ? (
+        <div className="flex flex-col items-center gap-3">
+          {/* 附件预览 */}
+          {(attachments.length > 0 || uploadQueue.length > 0) && (
+            <div
+              className="flex w-full flex-row items-end gap-2 overflow-x-scroll px-1"
+              data-testid="voice-attachments-preview"
             >
-              <ArrowUpIcon size={14} />
-            </PromptInputSubmit>
+              {attachments.map((attachment) => (
+                <PreviewAttachment
+                  attachment={attachment}
+                  key={attachment.url}
+                  onRemove={() => {
+                    setAttachments((currentAttachments) =>
+                      currentAttachments.filter((a) => a.url !== attachment.url)
+                    );
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = "";
+                    }
+                  }}
+                />
+              ))}
+              {uploadQueue.map((filename) => (
+                <PreviewAttachment
+                  attachment={{
+                    url: "",
+                    name: filename,
+                    contentType: "",
+                  }}
+                  isUploading={true}
+                  key={filename}
+                />
+              ))}
+            </div>
           )}
-        </PromptInputToolbar>
-      </PromptInput>
+          {/* 录音状态提示 */}
+          <div className="text-center text-muted-foreground text-xs">
+            {isProcessing
+              ? "正在识别..."
+              : isListening
+                ? "松开结束录音"
+                : "按住说话"}
+          </div>
+
+          {/* 录音按钮 */}
+          <button
+            className={cn(
+              "flex size-16 select-none items-center justify-center rounded-full border-2 transition-all duration-200",
+              isListening
+                ? "scale-110 border-red-500 bg-red-500/10 text-red-500 shadow-lg shadow-red-500/20"
+                : isProcessing
+                  ? "border-muted bg-muted text-muted-foreground"
+                  : "border-primary bg-primary/5 text-primary hover:bg-primary/10 active:scale-95"
+            )}
+            data-testid="voice-record-button"
+            disabled={status !== "ready" || isProcessing}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              handleVoiceStart();
+            }}
+            onPointerLeave={() => {
+              // 手指滑出按钮时取消录音
+              if (isListening) {
+                cancelListening();
+                toast.info("已取消录音");
+              }
+            }}
+            onPointerUp={(e) => {
+              e.preventDefault();
+              handleVoiceEnd();
+            }}
+            type="button"
+          >
+            <div className={cn(isListening && "animate-pulse")}>
+              <MicIcon size={24} />
+            </div>
+          </button>
+
+          {/* 工具栏：文件上传 + 模型选择 */}
+          <div className="flex w-full items-center justify-between px-1">
+            <div className="flex items-center gap-0 sm:gap-0.5">
+              <AttachmentsButton
+                fileInputRef={fileInputRef}
+                selectedModelId={selectedModelId}
+                status={status}
+              />
+              <ModelSelectorCompact
+                onModelChange={onModelChange}
+                selectedModelId={selectedModelId}
+              />
+            </div>
+            <ApiCallUsage refreshKey={refreshKey} />
+          </div>
+        </div>
+      ) : (
+        /* 文本模式：保持原有输入框 */
+        <PromptInput
+          className="rounded-xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (status !== "ready") {
+              toast.error("Please wait for the model to finish its response!");
+            } else {
+              submitForm();
+            }
+          }}
+        >
+          {(attachments.length > 0 || uploadQueue.length > 0) && (
+            <div
+              className="flex flex-row items-end gap-2 overflow-x-scroll"
+              data-testid="attachments-preview"
+            >
+              {attachments.map((attachment) => (
+                <PreviewAttachment
+                  attachment={attachment}
+                  key={attachment.url}
+                  onRemove={() => {
+                    setAttachments((currentAttachments) =>
+                      currentAttachments.filter((a) => a.url !== attachment.url)
+                    );
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = "";
+                    }
+                  }}
+                />
+              ))}
+
+              {uploadQueue.map((filename) => (
+                <PreviewAttachment
+                  attachment={{
+                    url: "",
+                    name: filename,
+                    contentType: "",
+                  }}
+                  isUploading={true}
+                  key={filename}
+                />
+              ))}
+            </div>
+          )}
+          <div className="flex flex-row items-start gap-1 sm:gap-2">
+            <PromptInputTextarea
+              autoFocus
+              className="grow resize-none border-0! border-none! bg-transparent p-2 text-sm outline-none ring-0 [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden"
+              data-testid="multimodal-input"
+              disableAutoResize={true}
+              maxHeight={200}
+              minHeight={44}
+              onChange={handleInput}
+              placeholder="输入消息..."
+              ref={textareaRef}
+              rows={1}
+              value={input}
+            />{" "}
+            <ApiCallUsage refreshKey={refreshKey} />
+          </div>
+          <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
+            <PromptInputTools className="gap-0 sm:gap-0.5">
+              {/* PDF 附件上传按钮 */}
+              <AttachmentsButton
+                fileInputRef={fileInputRef}
+                selectedModelId={selectedModelId}
+                status={status}
+              />
+              <ModelSelectorCompact
+                onModelChange={onModelChange}
+                selectedModelId={selectedModelId}
+              />
+            </PromptInputTools>
+
+            {status === "submitted" ? (
+              <StopButton setMessages={setMessages} stop={stop} />
+            ) : (
+              <PromptInputSubmit
+                className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+                data-testid="send-button"
+                disabled={!input.trim() || uploadQueue.length > 0}
+                status={status}
+              >
+                <ArrowUpIcon size={14} />
+              </PromptInputSubmit>
+            )}
+          </PromptInputToolbar>
+        </PromptInput>
+      )}
     </div>
   );
 }

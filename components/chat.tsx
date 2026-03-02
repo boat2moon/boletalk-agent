@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { ChatHeader } from "@/components/chat-header";
+import { useGlobalSpeechSynthesis } from "@/components/speech-synthesis-provider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,8 @@ import { MultimodalInput } from "./multimodal-input";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
+import { useVoiceMode } from "./voice-mode-context";
+import { VoiceServiceStatus } from "./voice-service-status";
 
 export function Chat({
   id,
@@ -58,6 +61,13 @@ export function Chat({
   });
 
   const { mutate } = useSWRConfig();
+  const { voiceMode } = useVoiceMode();
+  const { speakBase64WithCache } = useGlobalSpeechSynthesis();
+  const voiceModeRef = useRef(voiceMode);
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
 
   // Handle browser back/forward navigation
   useEffect(() => {
@@ -80,6 +90,8 @@ export function Chat({
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
   }, [currentModelId]);
+
+  const messagesRef = useRef<ChatMessage[]>(initialMessages);
 
   const {
     messages,
@@ -104,6 +116,7 @@ export function Chat({
             message: request.messages.at(-1),
             selectedChatModel: currentModelIdRef.current,
             selectedVisibilityType: visibilityType,
+            voiceMode: voiceModeRef.current === "voice",
             ...request.body,
           },
         };
@@ -114,13 +127,24 @@ export function Chat({
       if (dataPart.type === "data-usage") {
         setUsage(dataPart.data);
       }
+      // 接收服务端推送的 TTS 音频（同时缓存）
+      if (
+        dataPart.type === "data-ttsAudio" &&
+        voiceModeRef.current === "voice"
+      ) {
+        const { audioBase64, mimeType } = dataPart.data;
+        // 获取当前最后一条 assistant 消息的 ID 用于缓存
+        const lastMsg = messagesRef.current?.at(-1);
+        const messageId =
+          lastMsg?.role === "assistant" ? lastMsg.id : "unknown";
+        speakBase64WithCache(messageId, audioBase64, mimeType);
+      }
     },
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
       if (error instanceof ChatSDKError) {
-        // Check if it's a credit card error
         if (
           error.message?.includes("AI Gateway requires a valid credit card")
         ) {
@@ -139,6 +163,11 @@ export function Chat({
       }
     },
   });
+
+  // 同步 messagesRef 以便 onData 中能获取最新消息
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
@@ -261,6 +290,8 @@ export function Chat({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <VoiceServiceStatus />
     </>
   );
 }
