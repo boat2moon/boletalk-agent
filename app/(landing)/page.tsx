@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DemoSection } from "@/components/demo-section";
+import { LogoTyping } from "@/components/logo-typing";
 import { ScrollToTopLink } from "@/components/scroll-to-top-link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -71,7 +72,7 @@ export default function HomePage() {
       <div className="h-14" />
 
       {/* Hero Section */}
-      <section className="container mx-auto px-4 py-16 md:py-24">
+      <section className="container mx-auto px-4 pt-16 md:pt-24">
         <div className="mx-auto max-w-4xl space-y-6 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-accent px-3 py-1 text-accent-foreground text-sm">
             <Sparkles className="size-4" />
@@ -131,11 +132,14 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+
+          {/* Large Logo + Typing */}
+          <LogoTyping />
         </div>
       </section>
 
       {/* Features Section - 毛玻璃卡片 */}
-      <section className="container mx-auto px-4 py-16 md:py-24">
+      <section className="container mx-auto px-4 pt-19 pb-16 md:pb-24">
         <div className="mb-12 space-y-4 text-center">
           <h2 className="text-balance font-bold text-3xl md:text-4xl">
             核心功能
