@@ -148,6 +148,7 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
                 // 使用 startTransition 包裹路由跳转，避免路由切换阻塞 UI 动画渲染
                 startTransition(() => {
                   router.push("/chat");
+                  router.refresh();
                 });
               } else if (!isActive) {
                 setVoiceMode(option.value);
