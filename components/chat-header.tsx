@@ -3,7 +3,7 @@
 import { MoonIcon, SunIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { memo } from "react";
+import { memo, useTransition } from "react";
 import { useWindowSize } from "usehooks-ts";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ function PureChatHeader({
   const { setTheme, resolvedTheme } = useTheme();
 
   const { width: windowWidth } = useWindowSize();
+  const [, startTransition] = useTransition();
 
   return (
     <header className="sticky top-0 z-10 flex items-center gap-2 bg-background px-2 py-1.5 md:px-2">
@@ -43,8 +44,10 @@ function PureChatHeader({
               setVoiceMode(mode);
               // biome-ignore lint/suspicious/noDocumentCookie: intentional client-side cookie for model reset
               document.cookie = `chat-model=chat-model-glm; path=/; max-age=${60 * 60 * 24 * 365}`;
-              router.push("/chat");
-              router.refresh();
+              startTransition(() => {
+                router.push("/chat");
+                router.refresh();
+              });
             }}
           />
         </div>

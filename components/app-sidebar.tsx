@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
@@ -43,6 +43,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
   const { setOpenMobile } = useSidebar();
   const { mutate } = useSWRConfig();
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
+  const [, startTransition] = useTransition();
 
   const handleDeleteAll = () => {
     const deletePromise = fetch("/api/history", {
@@ -104,8 +105,10 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                     // 新建聊天时重置模型为默认的 GLM
                     // biome-ignore lint/suspicious/noDocumentCookie: intentional client-side cookie for model reset
                     document.cookie = `chat-model=chat-model-glm; path=/; max-age=${60 * 60 * 24 * 365}`;
-                    router.push("/chat");
-                    router.refresh();
+                    startTransition(() => {
+                      router.push("/chat");
+                      router.refresh();
+                    });
                   }}
                 />
               </div>

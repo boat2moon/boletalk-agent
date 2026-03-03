@@ -3,7 +3,7 @@
 import { LockIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, useTransition } from "react";
 import { guestRegex } from "@/lib/constants";
 import {
   Tooltip,
@@ -38,6 +38,7 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
   }>({ left: 0, width: 0 });
   // 首次渲染时跳过动画，直接定位到正确位置
   const [enableTransition, setEnableTransition] = useState(false);
+  const [, startTransition] = useTransition();
 
   // 计算滑动指示器的位置
   useEffect(() => {
@@ -142,9 +143,12 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
                 return;
               }
               if (isNewChatAction) {
-                // 先切换模式触发滑动动画，延迟跳转让动画播放完
+                // 先切换模式触发滑动动画，让 React 知道这个状态更新优先级更高
                 setVoiceMode(option.value);
-                setTimeout(() => router.push("/chat"), 300);
+                // 使用 startTransition 包裹路由跳转，避免路由切换阻塞 UI 动画渲染
+                startTransition(() => {
+                  router.push("/chat");
+                });
               } else if (!isActive) {
                 setVoiceMode(option.value);
               }
