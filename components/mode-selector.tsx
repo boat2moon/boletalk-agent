@@ -164,7 +164,7 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
               <Tooltip>
                 <TooltipTrigger asChild>{button}</TooltipTrigger>
                 <TooltipContent
-                  className="z-100 border-zinc-700 bg-zinc-800 text-white"
+                  className="z-50 border-zinc-700 bg-zinc-800 text-white"
                   side="bottom"
                 >
                   <p>访客不可用，请先登录</p>
@@ -181,7 +181,7 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
               <Tooltip>
                 <TooltipTrigger asChild>{button}</TooltipTrigger>
                 <TooltipContent
-                  className="z-100 border-zinc-700 bg-zinc-800 text-white"
+                  className="z-50 border-zinc-700 bg-zinc-800 text-white"
                   side="bottom"
                 >
                   <p>新建{option.label}会话</p>

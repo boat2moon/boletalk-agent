@@ -78,6 +78,7 @@ export function Chat({
   const voiceModeRef = useRef(voiceMode);
 
   // 加载已有会话时，同步 voiceMode 到该会话的 chatType
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
   useEffect(() => {
     if (!initialChatType) {
       return;
@@ -92,9 +93,10 @@ export function Chat({
     if (target && target !== voiceMode) {
       setVoiceMode(target);
     }
-    // 仅在 mount 时执行一次
+    // 仅在 mount 或打开新会话时执行一次。
+    // 不要把 voiceMode 加入依赖，否则正在看已存文本会话时点击其他模式会被立即重置回 text 导致跳页失败。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialChatType, setVoiceMode, voiceMode]);
+  }, [initialChatType]);
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
