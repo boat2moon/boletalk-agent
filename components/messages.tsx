@@ -52,29 +52,69 @@ function PureMessages({
         <div className="mx-auto flex min-w-0 max-w-4xl flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
           {messages.length === 0 && <Greeting />}
 
-          {messages.map((message, index) => (
-            <PreviewMessage
-              chatId={chatId}
-              isLoading={
-                status === "streaming" && messages.length - 1 === index
+          {(() => {
+            const filteredMessages = messages.filter((message) => {
+              // 过滤掉因为接收到早期 stream data（如 data-chat-title、data-usage）
+              // 而意外创建的空 assistant 消息
+              if (message.role === "assistant") {
+                const hasRenderableContent = message.parts?.some((part) => {
+                  // 有实际文本内容
+                  if (part.type === "text") {
+                    return part.text.length > 0;
+                  }
+                  // 有推理内容
+                  if (part.type === "reasoning") {
+                    return (part.text?.length ?? 0) > 0;
+                  }
+                  // tool 调用类型（以 tool- 开头的）视为有内容
+                  if (
+                    typeof part.type === "string" &&
+                    part.type.startsWith("tool-")
+                  ) {
+                    return true;
+                  }
+                  // 其他类型（data-chat-title、data-usage、data-ttsAudio、step-start 等）
+                  // 不视为可渲染内容
+                  return false;
+                });
+                return !!hasRenderableContent;
               }
-              isReadonly={isReadonly}
-              key={message.id}
-              message={message}
-              regenerate={regenerate}
-              requiresScrollPadding={
-                hasSentMessage && index === messages.length - 1
-              }
-              setMessages={setMessages}
-              vote={
-                votes
-                  ? votes.find((vote) => vote.messageId === message.id)
-                  : undefined
-              }
-            />
-          ))}
+              return true;
+            });
 
-          {status === "submitted" && <ThinkingMessage />}
+            return (
+              <>
+                {filteredMessages.map((message, index) => (
+                  <PreviewMessage
+                    chatId={chatId}
+                    isLoading={
+                      status === "streaming" &&
+                      filteredMessages.length - 1 === index
+                    }
+                    isReadonly={isReadonly}
+                    key={message.id}
+                    message={message}
+                    regenerate={regenerate}
+                    requiresScrollPadding={
+                      hasSentMessage && index === filteredMessages.length - 1
+                    }
+                    setMessages={setMessages}
+                    vote={
+                      votes
+                        ? votes.find((vote) => vote.messageId === message.id)
+                        : undefined
+                    }
+                  />
+                ))}
+
+                {(status === "submitted" ||
+                  (status === "streaming" &&
+                    filteredMessages.at(-1)?.role !== "assistant")) && (
+                  <ThinkingMessage />
+                )}
+              </>
+            );
+          })()}
 
           <div
             className="min-h-[24px] min-w-[24px] shrink-0"
