@@ -22,7 +22,7 @@ const MODE_OPTIONS: ModeOption[] = [
   { value: "text", label: "纯文本", shortLabel: "文本" },
   { value: "voice", label: "基础语音", shortLabel: "语音" },
   { value: "realtime", label: "电话面试", shortLabel: "电话" },
-  { value: "avatar", label: "视频面试", shortLabel: "视频", disabled: true },
+  { value: "avatar", label: "视频面试", shortLabel: "视频" },
 ];
 
 function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
