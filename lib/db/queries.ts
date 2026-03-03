@@ -539,6 +539,23 @@ export async function updateChatVisibilityById({
   }
 }
 
+export async function updateChatTitleById({
+  chatId,
+  title,
+}: {
+  chatId: string;
+  title: string;
+}) {
+  try {
+    return await db.update(chat).set({ title }).where(eq(chat.id, chatId));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update chat title by id"
+    );
+  }
+}
+
 export async function updateChatLastContextById({
   chatId,
   context,

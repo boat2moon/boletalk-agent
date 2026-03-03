@@ -115,7 +115,10 @@ export function AvatarPage({
         const res = await fetch("/api/avatar/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resumeText }),
+          body: JSON.stringify({
+            chatId: chatIdRef.current,
+            resumeText,
+          }),
         });
 
         if (!res.ok) {
@@ -208,11 +211,13 @@ export function AvatarPage({
             duration,
           }),
         });
+        // 触发侧边栏 revalidate，同步后端保存的真实标题（含时长）
+        mutate(unstable_serialize(getChatHistoryPaginationKey));
       } catch (err) {
         console.warn("保存视频面试记录失败:", err);
       }
     },
-    [sessionId]
+    [sessionId, mutate]
   );
 
   // 通知父组件"是否有活跃会话"的状态变化

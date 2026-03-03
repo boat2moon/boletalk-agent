@@ -11,7 +11,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useSWRConfig } from "swr";
+import { unstable_serialize } from "swr/infinite";
 import { ChatHeader } from "@/components/chat-header";
+import {
+  type ChatHistory,
+  getChatHistoryPaginationKey,
+} from "@/components/sidebar-history";
 import type { ResumeAnalysis } from "@/lib/ai/agent/resume-analyze";
 import { DEFAULT_REALTIME_MODEL } from "@/lib/ai/realtime-models";
 import { generateUUID } from "@/lib/utils";
@@ -46,6 +52,7 @@ export function RealtimePage({
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [callDuration, setCallDuration] = useState(0);
   const chatIdRef = useRef(generateUUID());
+  const { mutate } = useSWRConfig();
 
   /**
    * 开始面试
@@ -59,6 +66,7 @@ export function RealtimePage({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            chatId: chatIdRef.current,
             selectedModel,
             resumeText,
           }),
@@ -77,20 +85,51 @@ export function RealtimePage({
         }
 
         // 进入通话阶段，传递 WebSocket 连接信息
-        setPhase("call");
-
         // 将连接信息存储在 ref 中供 CallView 使用
         wsInfoRef.current = {
           sessionToken: data.sessionToken,
           wsUrl: data.wsUrl,
         };
+
+        // 乐观插入侧边栏会话列表
+        const skeletonChat = {
+          id: chatIdRef.current,
+          title: "电话面试",
+          createdAt: new Date(),
+          userId: "",
+          visibility: "private" as const,
+          chatType: "realtime",
+          lastContext: null,
+        };
+        const sidebarKey = unstable_serialize(getChatHistoryPaginationKey);
+        mutate(
+          sidebarKey,
+          (currentData: ChatHistory[] | undefined) => {
+            if (!currentData || currentData.length === 0) {
+              return [
+                { chats: [skeletonChat], hasMore: false },
+              ] as ChatHistory[];
+            }
+            return [
+              {
+                ...currentData[0],
+                chats: [skeletonChat, ...currentData[0].chats],
+              },
+              ...currentData.slice(1),
+            ] as ChatHistory[];
+          },
+          { revalidate: false }
+        );
+        window.history.pushState({}, "", `/chat/${chatIdRef.current}`);
+
+        setPhase("call");
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "创建面试会话失败"
         );
       }
     },
-    [selectedModel]
+    [selectedModel, mutate]
   );
 
   const wsInfoRef = useRef<{
@@ -119,11 +158,13 @@ export function RealtimePage({
             model: selectedModel,
           }),
         });
+        // 触发侧边栏 revalidate，同步后端保存的真实标题（含时长）
+        mutate(unstable_serialize(getChatHistoryPaginationKey));
       } catch (err) {
         console.warn("保存面试记录失败:", err);
       }
     },
-    [selectedModel]
+    [selectedModel, mutate]
   );
 
   // 通知父组件“是否有活跃会话”的状态变化

@@ -21,10 +21,13 @@ import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import {
   getChatApiCallCountByUserId,
   recordChatApiCall,
+  saveChat,
 } from "@/lib/db/queries";
 import { ChatSDKError } from "@/lib/errors";
 
 const requestSchema = z.object({
+  /** 由前端生成的会话 ID */
+  chatId: z.string(),
   /** 简历文本（可选，前端解析 PDF 后以 base64 传入） */
   resumeText: z.string().optional(),
 });
@@ -75,9 +78,20 @@ export async function POST(request: Request) {
     }
 
     // 4. 启动数字人流媒体服务（前端已确保停复机开机）
+    // 注意：这里的 sessionId 是阿里云 RTC / 播报特有的会话 ID，不是数据库的 chatId
     const { sessionId, channel } = await startAvatarInstance(session.user.id);
 
-    // 5. 返回连接信息
+    // 5. 将会话记录先行持久化到数据库，支持前端 SWR revalidate（防止乐观 UI 消失）
+    const now = new Date();
+    await saveChat({
+      id: body.chatId,
+      userId: session.user.id,
+      title: `${now.getMonth() + 1}月${now.getDate()}日视频面试（进行中...）`,
+      visibility: "private",
+      chatType: "avatar",
+    });
+
+    // 6. 返回连接信息
     return Response.json({
       sessionId,
       channel,

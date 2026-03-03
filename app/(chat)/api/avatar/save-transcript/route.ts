@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { saveChat, saveMessages } from "@/lib/db/queries";
+import { saveMessages, updateChatTitleById } from "@/lib/db/queries";
 import { ChatSDKError } from "@/lib/errors";
 import { generateUUID } from "@/lib/utils";
 
@@ -41,15 +41,15 @@ export async function POST(request: Request) {
 
     const chatId = body.chatId;
 
-    // 创建 chat 条目
+    // 查更新 chat 记录，设置最终的标题
     const now = new Date();
-    const title = `${now.getMonth() + 1}月${now.getDate()}日视频面试（${Math.round(body.duration / 60)}分钟）`;
-    await saveChat({
-      id: chatId,
-      userId: session.user.id,
+    const totalSeconds = Math.round(body.duration);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    const title = `${now.getMonth() + 1}月${now.getDate()}日视频面试（${mins}分${secs}秒）`;
+    await updateChatTitleById({
+      chatId,
       title,
-      visibility: "private",
-      chatType: "avatar",
     });
 
     // 将 messages 转换为标准消息格式保存

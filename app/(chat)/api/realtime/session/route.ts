@@ -23,11 +23,13 @@ import { realtimeModels } from "@/lib/ai/realtime-models";
 import {
   getChatApiCallCountByUserId,
   recordChatApiCall,
+  saveChat,
 } from "@/lib/db/queries";
 import { ChatSDKError } from "@/lib/errors";
-import { generateUUID } from "@/lib/utils";
 
 const requestSchema = z.object({
+  /** 第一阶段由前端生成的会话 ID */
+  chatId: z.string(),
   /** 选择的 Realtime 模型 ID */
   selectedModel: z.string(),
   /** 简历文本（可选，由前端解析 PDF 后传入） */
@@ -124,8 +126,18 @@ export async function POST(request: Request) {
       }
     }
 
-    // 5. 生成 session token（JWT）
-    const sessionId = generateUUID();
+    // 5. 将会话记录先行持久化到数据库，支持前端 SWR revalidate（防止乐观 UI 消失）
+    const sessionId = body.chatId;
+    const now = new Date();
+    await saveChat({
+      id: sessionId,
+      userId: session.user.id,
+      title: `${now.getMonth() + 1}月${now.getDate()}日电话面试（进行中...）`,
+      visibility: "private",
+      chatType: "realtime",
+    });
+
+    // 6. 生成 session token（JWT）
     const token = await signJWT(
       {
         sessionId,
@@ -138,7 +150,7 @@ export async function POST(request: Request) {
       SESSION_SECRET
     );
 
-    // 6. 返回连接信息
+    // 7. 返回连接信息
     return Response.json({
       sessionToken: token,
       wsUrl: `${BOLE_SERVER_WS_URL}/ws/realtime`,
