@@ -11,7 +11,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useSWRConfig } from "swr";
+import { unstable_serialize } from "swr/infinite";
 import { ChatHeader } from "@/components/chat-header";
+import {
+  type ChatHistory,
+  getChatHistoryPaginationKey,
+} from "@/components/sidebar-history";
 import type { ResumeAnalysis } from "@/lib/ai/agent/resume-analyze";
 import { generateUUID } from "@/lib/utils";
 import { AvatarPreparationView } from "./avatar-preparation-view";
@@ -55,6 +61,7 @@ export function AvatarPage({
   /** 前端展示的启动进度文案 */
   const [bootStatus, setBootStatus] = useState<string>("");
   const chatIdRef = useRef(generateUUID());
+  const { mutate } = useSWRConfig();
 
   /**
    * 开始面试：两阶段流程
@@ -62,76 +69,111 @@ export function AvatarPage({
    * Phase 1: 检查/触发 GPU 实例开机 + 轮询等待
    * Phase 2: 调用 /api/avatar/start 启动数字人会话
    */
-  const handleStartInterview = useCallback(async (resumeText?: string) => {
-    try {
-      // ── Phase 1: 确保 GPU 实例开机 ──
-      setBootStatus("正在检查数字人服务状态...");
+  const handleStartInterview = useCallback(
+    async (resumeText?: string) => {
+      try {
+        // ── Phase 1: 确保 GPU 实例开机 ──
+        setBootStatus("正在检查数字人服务状态...");
 
-      // 查询当前电源状态
-      const statusRes = await fetch("/api/avatar/power");
-      const statusData = await statusRes.json();
-      let powerStatus: number = statusData.status;
+        // 查询当前电源状态
+        const statusRes = await fetch("/api/avatar/power");
+        const statusData = await statusRes.json();
+        let powerStatus: number = statusData.status;
 
-      // 如果未开机，触发开机
-      if (powerStatus !== 10) {
-        setBootStatus("数字人服务未就绪，正在启动...");
-        await fetch("/api/avatar/power", { method: "POST" });
+        // 如果未开机，触发开机
+        if (powerStatus !== 10) {
+          setBootStatus("数字人服务未就绪，正在启动...");
+          await fetch("/api/avatar/power", { method: "POST" });
 
-        // 轮询等待开机完成（每 3 秒查一次，最多 5 分钟）
-        const startTime = Date.now();
-        const MAX_WAIT = 5 * 60 * 1000;
+          // 轮询等待开机完成（每 3 秒查一次，最多 5 分钟）
+          const startTime = Date.now();
+          const MAX_WAIT = 5 * 60 * 1000;
 
-        while (powerStatus !== 10) {
-          const elapsed = Math.floor((Date.now() - startTime) / 1000);
-          setBootStatus(
-            `数字人服务正在启动中，请耐心等待（已等待 ${elapsed} 秒，通常需要 1~3 分钟）...`
-          );
-
-          if (Date.now() - startTime > MAX_WAIT) {
-            throw new Error(
-              "数字人服务启动超时（已等待超过 5 分钟），请稍后重试"
+          while (powerStatus !== 10) {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            setBootStatus(
+              `数字人服务正在启动中，请耐心等待（已等待 ${elapsed} 秒，通常需要 1~3 分钟）...`
             );
+
+            if (Date.now() - startTime > MAX_WAIT) {
+              throw new Error(
+                "数字人服务启动超时（已等待超过 5 分钟），请稍后重试"
+              );
+            }
+
+            await new Promise((r) => setTimeout(r, 3000));
+
+            const pollRes = await fetch("/api/avatar/power");
+            const pollData = await pollRes.json();
+            powerStatus = pollData.status;
           }
-
-          await new Promise((r) => setTimeout(r, 3000));
-
-          const pollRes = await fetch("/api/avatar/power");
-          const pollData = await pollRes.json();
-          powerStatus = pollData.status;
         }
+
+        // ── Phase 2: 启动数字人会话 ──
+        setBootStatus("数字人服务已就绪，正在创建面试会话...");
+
+        const res = await fetch("/api/avatar/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resumeText }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.message || `请求失败 (${res.status})`);
+        }
+
+        const data = await res.json();
+
+        if (data.resumeAnalysis) {
+          setResumeAnalysis(data.resumeAnalysis);
+        }
+
+        setBootStatus("");
+        setSessionId(data.sessionId);
+        setChannel(data.channel);
+
+        // 乐观插入侧边栏会话列表
+        const skeletonChat = {
+          id: chatIdRef.current,
+          title: "数字人模拟面试",
+          createdAt: new Date(),
+          userId: "",
+          visibility: "private" as const,
+          chatType: "avatar",
+          lastContext: null,
+        };
+        const key = unstable_serialize(getChatHistoryPaginationKey);
+        mutate(
+          key,
+          (currentData: ChatHistory[] | undefined) => {
+            if (!currentData || currentData.length === 0) {
+              return [
+                { chats: [skeletonChat], hasMore: false },
+              ] as ChatHistory[];
+            }
+            return [
+              {
+                ...currentData[0],
+                chats: [skeletonChat, ...currentData[0].chats],
+              },
+              ...currentData.slice(1),
+            ] as ChatHistory[];
+          },
+          { revalidate: false }
+        );
+        window.history.pushState({}, "", `/chat/${chatIdRef.current}`);
+
+        setPhase("session");
+      } catch (error) {
+        setBootStatus("");
+        toast.error(
+          error instanceof Error ? error.message : "启动数字人面试失败"
+        );
       }
-
-      // ── Phase 2: 启动数字人会话 ──
-      setBootStatus("数字人服务已就绪，正在创建面试会话...");
-
-      const res = await fetch("/api/avatar/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeText }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `请求失败 (${res.status})`);
-      }
-
-      const data = await res.json();
-
-      if (data.resumeAnalysis) {
-        setResumeAnalysis(data.resumeAnalysis);
-      }
-
-      setBootStatus("");
-      setSessionId(data.sessionId);
-      setChannel(data.channel);
-      setPhase("session");
-    } catch (error) {
-      setBootStatus("");
-      toast.error(
-        error instanceof Error ? error.message : "启动数字人面试失败"
-      );
-    }
-  }, []);
+    },
+    [mutate]
+  );
 
   /**
    * 面试结束

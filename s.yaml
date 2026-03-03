@@ -24,13 +24,26 @@ resources:
         - run: echo "POSTGRES_URL=${env(POSTGRES_URL)}" > .env.local
         - run: echo "DEEPSEEK_API_KEY=${env(DEEPSEEK_API_KEY)}" >> .env.local
         - run: echo "ZHIPU_API_KEY=${env(ZHIPU_API_KEY)}" >> .env.local
+        - run: echo "MINIMAX_API_KEY=${env(MINIMAX_API_KEY)}" >> .env.local
+        - run: echo "FISH_AUDIO_API_KEY=${env(FISH_AUDIO_API_KEY)}" >> .env.local
+        - run: echo "GROQ_API_KEY=${env(GROQ_API_KEY)}" >> .env.local
         - run: echo "AUTH_SECRET=${env(AUTH_SECRET)}" >> .env.local
         - run: echo "AUTH_GITHUB_ID=${env(AUTH_GITHUB_ID)}" >> .env.local
         - run: echo "AUTH_GITHUB_SECRET=${env(AUTH_GITHUB_SECRET)}" >> .env.local
         - run: echo "EMAIL_HOST=${env(EMAIL_HOST)}" >> .env.local
         - run: echo "EMAIL_PORT=${env(EMAIL_PORT)}" >> .env.local
+        - run: echo "EMAIL_USER=${env(EMAIL_USER)}" >> .env.local
         - run: echo "EMAIL_PASSWORD=${env(EMAIL_PASSWORD)}" >> .env.local
         - run: echo "EMAIL_FROM=${env(EMAIL_FROM)}" >> .env.local
+        # Mode 3 - Realtime Voice Interview
+        - run: echo "BOLE_SERVER_WS_URL=${env(BOLE_SERVER_WS_URL)}" >> .env.local
+        - run: echo "REALTIME_SESSION_SECRET=${env(REALTIME_SESSION_SECRET)}" >> .env.local
+        # Mode 4 - Avatar Digital Human
+        - run: echo "ALIBABA_CLOUD_ACCESS_KEY_ID=${env(ALIBABA_CLOUD_ACCESS_KEY_ID)}" >> .env.local
+        - run: echo "ALIBABA_CLOUD_ACCESS_KEY_SECRET=${env(ALIBABA_CLOUD_ACCESS_KEY_SECRET)}" >> .env.local
+        - run: echo "AVATAR_TENANT_ID=${env(AVATAR_TENANT_ID)}" >> .env.local
+        - run: echo "AVATAR_APP_ID=${env(AVATAR_APP_ID)}" >> .env.local
+        - run: echo "AVATAR_INSTANCE_ID=${env(AVATAR_INSTANCE_ID)}" >> .env.local
         # -------------------------------------------------------------------------
         # 构建 Next.js standalone 产物
         # -------------------------------------------------------------------------
@@ -56,13 +69,26 @@ resources:
         POSTGRES_URL: ${env(POSTGRES_URL)}
         DEEPSEEK_API_KEY: ${env(DEEPSEEK_API_KEY)}
         ZHIPU_API_KEY: ${env(ZHIPU_API_KEY)}
+        MINIMAX_API_KEY: ${env(MINIMAX_API_KEY)}
+        FISH_AUDIO_API_KEY: ${env(FISH_AUDIO_API_KEY)}
+        GROQ_API_KEY: ${env(GROQ_API_KEY)}
         AUTH_SECRET: ${env(AUTH_SECRET)}
         AUTH_GITHUB_ID: ${env(AUTH_GITHUB_ID)}
         AUTH_GITHUB_SECRET: ${env(AUTH_GITHUB_SECRET)}
         EMAIL_HOST: ${env(EMAIL_HOST)}
         EMAIL_PORT: ${env(EMAIL_PORT)}
+        EMAIL_USER: ${env(EMAIL_USER)}
         EMAIL_PASSWORD: ${env(EMAIL_PASSWORD)}
         EMAIL_FROM: ${env(EMAIL_FROM)}
+        # Mode 3 - Realtime Voice Interview
+        BOLE_SERVER_WS_URL: ${env(BOLE_SERVER_WS_URL)}
+        REALTIME_SESSION_SECRET: ${env(REALTIME_SESSION_SECRET)}
+        # Mode 4 - Avatar Digital Human
+        ALIBABA_CLOUD_ACCESS_KEY_ID: ${env(ALIBABA_CLOUD_ACCESS_KEY_ID)}
+        ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${env(ALIBABA_CLOUD_ACCESS_KEY_SECRET)}
+        AVATAR_TENANT_ID: ${env(AVATAR_TENANT_ID)}
+        AVATAR_APP_ID: ${env(AVATAR_APP_ID)}
+        AVATAR_INSTANCE_ID: ${env(AVATAR_INSTANCE_ID)}
       customRuntimeConfig:
         command:
           - node

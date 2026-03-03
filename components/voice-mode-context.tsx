@@ -5,7 +5,6 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useEffect,
   useState,
 } from "react";
 
@@ -32,22 +31,11 @@ const VoiceModeContext = createContext<VoiceModeContextType>({
   },
 });
 
-const VALID_MODES: VoiceMode[] = ["text", "voice", "realtime", "avatar"];
-
 export function VoiceModeProvider({ children }: { children: ReactNode }) {
   const [voiceMode, setVoiceModeState] = useState<VoiceMode>("text");
 
-  // 从 localStorage 恢复模式
-  useEffect(() => {
-    const stored = localStorage.getItem("voice-mode");
-    if (stored && VALID_MODES.includes(stored as VoiceMode)) {
-      setVoiceModeState(stored as VoiceMode);
-    }
-  }, []);
-
   const setVoiceMode = useCallback((mode: VoiceMode) => {
     setVoiceModeState(mode);
-    localStorage.setItem("voice-mode", mode);
   }, []);
 
   // text ↔ voice 快速切换（保持向后兼容）

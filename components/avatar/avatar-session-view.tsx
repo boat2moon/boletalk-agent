@@ -21,9 +21,18 @@ import type { AvatarChannel, AvatarMessage } from "./avatar-page";
 
 // ── BroadcastingAvatarSDK 类型声明 ──────────────────────────────
 
+/** SDK 事件回调参数类型 */
+// biome-ignore lint/nursery/useConsistentTypeDefinitions: interface needed for Window declaration merging consistency
+interface AvatarSDKEvent {
+  errorCode: number;
+  source: string;
+  errorMsg: string;
+}
+
 /** 通过 CDN 加载的 BroadcastingAvatarSDK 全局类型 */
 declare global {
-  type Window = {
+  // biome-ignore lint/nursery/useConsistentTypeDefinitions: must be interface for global declaration merging
+  interface Window {
     BroadcastingAvatarSDK: new (options: {
       /** RTC 频道信息（注意：字段名需小驼峰） */
       channel: {
@@ -46,17 +55,9 @@ declare global {
       /** 初始化成功回调 */
       onInitSuccess?: () => void;
       /** 错误回调 */
-      onError?: (e: {
-        errorCode: number;
-        source: string;
-        errorMsg: string;
-      }) => void;
+      onError?: (e: AvatarSDKEvent) => void;
       /** 警告回调 */
-      onWarning?: (e: {
-        errorCode: number;
-        source: string;
-        errorMsg: string;
-      }) => void;
+      onWarning?: (e: AvatarSDKEvent) => void;
     }) => {
       /** 初始化 RTC 拉流 */
       init: () => Promise<void>;
@@ -67,7 +68,7 @@ declare global {
       /** RTC 取消静音 */
       unMuteRtc: () => void;
     };
-  };
+  }
 }
 
 /** BroadcastingAvatarSDK CDN 地址 */
@@ -129,7 +130,14 @@ function forceVideoPlay(container: HTMLDivElement) {
   }
 }
 
-// ── 组件 ──────────────────────────────────────────────
+// ── 超时保护常量 ───────────────────────────────────────────
+
+/** 最长会话时长（测试阶段 5 分钟） */
+const MAX_SESSION_MS = 5 * 60 * 1000;
+/** 用户无语音超时（1 分钟不说话自动关闭） */
+const IDLE_TIMEOUT_MS = 60 * 1000;
+
+// ── 组件 ─────────────────────────────────────────────────────
 
 export function AvatarSessionView({
   sessionId,
@@ -155,6 +163,9 @@ export function AvatarSessionView({
   } | null>(null);
   const startTimeRef = useRef(Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const maxTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const isEndingRef = useRef(false);
 
   // 生成简历上下文
   const resumeContext = resumeAnalysis
@@ -175,6 +186,16 @@ export function AvatarSessionView({
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, userMsg]);
+
+      // 用户说话了 → 重置空闲计时器
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        if (!isEndingRef.current) {
+          isEndingRef.current = true;
+          toast.info("已超过 1 分钟未检测到语音，面试自动结束");
+          handleEndRef.current();
+        }
+      }, IDLE_TIMEOUT_MS);
     }, []),
     onAgentReply: useCallback((text: string) => {
       // Agent 回复 → 添加助手消息 + 标记数字人说话中
@@ -361,7 +382,16 @@ export function AvatarSessionView({
    * 结束面试
    */
   const handleEnd = useCallback(() => {
+    if (isEndingRef.current) {
+      return;
+    }
+    isEndingRef.current = true;
     setIsEnding(true);
+
+    // 清理超时定时器
+    clearTimeout(maxTimerRef.current);
+    clearTimeout(idleTimerRef.current);
+
     const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
     // 停止 RTC 拉流并释放麦克风
@@ -377,6 +407,37 @@ export function AvatarSessionView({
 
     onEnd(messages, duration);
   }, [messages, onEnd]);
+
+  // handleEndRef 用于定时器回调，避免 stale closure
+  const handleEndRef = useRef(handleEnd);
+  useEffect(() => {
+    handleEndRef.current = handleEnd;
+  }, [handleEnd]);
+
+  // ── 超时保护：最长 5 分钟 + 初始 1 分钟空闲 ─────────────
+  useEffect(() => {
+    // 5 分钟总时长保护
+    maxTimerRef.current = setTimeout(() => {
+      if (!isEndingRef.current) {
+        toast.info("测试阶段每次面试最长 5 分钟，已自动结束");
+        handleEndRef.current();
+      }
+    }, MAX_SESSION_MS);
+
+    // 初始 1 分钟空闲保护（用户说话后会在 onTranscript 里重置）
+    idleTimerRef.current = setTimeout(() => {
+      if (!isEndingRef.current) {
+        isEndingRef.current = true;
+        toast.info("已超过 1 分钟未检测到语音，面试自动结束");
+        handleEndRef.current();
+      }
+    }, IDLE_TIMEOUT_MS);
+
+    return () => {
+      clearTimeout(maxTimerRef.current);
+      clearTimeout(idleTimerRef.current);
+    };
+  }, []); // 仅 mount 时启动
 
   /**
    * 键盘回车发送

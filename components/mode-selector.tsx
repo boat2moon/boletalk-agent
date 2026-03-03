@@ -2,7 +2,9 @@
 
 import { LockIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { memo, useEffect, useRef, useState } from "react";
+import { guestRegex } from "@/lib/constants";
 import {
   Tooltip,
   TooltipContent,
@@ -15,7 +17,6 @@ type ModeOption = {
   value: VoiceMode;
   label: string;
   shortLabel: string;
-  disabled?: boolean;
 };
 
 const MODE_OPTIONS: ModeOption[] = [
@@ -27,6 +28,8 @@ const MODE_OPTIONS: ModeOption[] = [
 
 function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
   const { voiceMode, setVoiceMode } = useVoiceMode();
+  const { data: session } = useSession();
+  const isGuest = guestRegex.test(session?.user?.email ?? "");
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<{
@@ -116,28 +119,26 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
 
       {MODE_OPTIONS.map((option) => {
         const isActive = voiceMode === option.value;
-        // 功能尚未上线的模式
-        const isComingSoon = option.disabled;
+        // 访客不允许使用视频面试
+        const isGuestBlocked = isGuest && option.value === "avatar";
         // 有活跃会话且非当前模式 → 点击将新建会话
-        const isNewChatAction = hasActiveChat && !isActive && !isComingSoon;
+        const isNewChatAction = hasActiveChat && !isActive && !isGuestBlocked;
 
         const button = (
           <button
             className={`relative z-10 flex items-center gap-1 rounded-lg px-3 py-1.5 font-medium text-sm transition-colors duration-200 ${
               isActive
                 ? "text-foreground"
-                : isComingSoon
+                : isGuestBlocked
                   ? "cursor-not-allowed text-muted-foreground/40"
-                  : isNewChatAction
-                    ? "cursor-pointer text-muted-foreground hover:text-foreground/70"
-                    : "cursor-pointer text-muted-foreground hover:text-foreground/70"
+                  : "cursor-pointer text-muted-foreground hover:text-foreground/70"
             }
             `}
             data-mode-btn
-            disabled={isComingSoon}
+            disabled={isGuestBlocked}
             key={option.value}
             onClick={() => {
-              if (isComingSoon) {
+              if (isGuestBlocked) {
                 return;
               }
               if (isNewChatAction) {
@@ -152,12 +153,12 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
           >
             <span className="hidden sm:inline">{option.label}</span>
             <span className="sm:hidden">{option.shortLabel}</span>
-            {isComingSoon && <LockIcon className="opacity-50" size={10} />}
+            {isGuestBlocked && <LockIcon className="opacity-50" size={10} />}
           </button>
         );
 
-        // 功能尚未上线的 tooltip
-        if (isComingSoon) {
+        // 访客限制 tooltip
+        if (isGuestBlocked) {
           return (
             <TooltipProvider delayDuration={0} key={option.value}>
               <Tooltip>
@@ -166,7 +167,7 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
                   className="z-100 border-zinc-700 bg-zinc-800 text-white"
                   side="bottom"
                 >
-                  <p>即将推出</p>
+                  <p>访客不可用，请先登录</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
