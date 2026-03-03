@@ -45,6 +45,7 @@ import { Button } from "./ui/button";
 import type { VisibilityType } from "./visibility-selector";
 import { useVoiceHealth } from "./voice-health-context";
 import { useVoiceMode } from "./voice-mode-context";
+import { VoiceServiceStatus } from "./voice-service-status";
 
 // 将文件读取为 base64 字符串的工具函数
 // 使用 FileReader API 将文件转换为 Data URL，然后提取 base64 部分
@@ -485,7 +486,10 @@ function PureMultimodalInput({
                 selectedModelId={selectedModelId}
               />
             </div>
-            <ApiCallUsage refreshKey={refreshKey} />
+            <div className="flex items-center gap-2">
+              <VoiceServiceStatus />
+              <ApiCallUsage refreshKey={refreshKey} />
+            </div>
           </div>
         </div>
       ) : (

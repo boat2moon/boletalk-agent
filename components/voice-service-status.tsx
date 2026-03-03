@@ -1,11 +1,18 @@
 "use client";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useVoiceHealth } from "./voice-health-context";
 import { useVoiceMode } from "./voice-mode-context";
 
 /**
  * 语音服务状态面板
  * 仅在语音模式下显示，使用 VoiceHealthContext 的实时状态
+ * 紧凑横排，鼠标悬浮展示全部服务详情
  */
 export function VoiceServiceStatus() {
   const { voiceMode } = useVoiceMode();
@@ -24,31 +31,112 @@ export function VoiceServiceStatus() {
 
   const hasAlert = isTtsDown || isSttDown;
 
+  const activeTts = ttsServices.find((s) => s.status === "available");
+  const activeStt = sttServices.find((s) => s.status === "available");
+
   return (
-    <div className="fixed right-0 bottom-0 z-40 min-w-[185px] rounded-tl-xl border-zinc-200/60 border-t border-l bg-white/80 px-3 py-2.5 text-xs text-zinc-600 leading-relaxed shadow-sm backdrop-blur-xl dark:border-zinc-700/40 dark:bg-zinc-900/85 dark:text-zinc-400">
-      <div className="mb-1.5 font-semibold text-[10px] tracking-wide opacity-50">
-        🎙️ 语音服务
-      </div>
-
-      <ServiceGroup label="TTS 文本→语音" services={ttsServices} />
-      <ServiceGroup label="STT 语音→文本" services={sttServices} />
-
-      {hasAlert && (
-        <div className="mt-1.5 border-zinc-200/40 border-t pt-1.5 dark:border-zinc-700/30">
-          <div className="font-medium text-[10px] text-red-500 dark:text-red-400">
-            ⚠️{" "}
-            {isTtsDown && isSttDown ? "TTS 和 STT" : isTtsDown ? "TTS" : "STT"}{" "}
-            服务不可用
-            <br />
-            <span className="opacity-70">请联系管理员，5分钟后自动重试</span>
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex cursor-default items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="text-[10px] opacity-50">🎙️</span>
+            <ServiceBadge
+              allDown={ttsServices.every((s) => s.status === "failed")}
+              label="TTS"
+              service={activeTts}
+            />
+            <span className="text-[10px] opacity-20">|</span>
+            <ServiceBadge
+              allDown={sttServices.every((s) => s.status === "failed")}
+              label="STT"
+              service={activeStt}
+            />
+            {hasAlert && (
+              <span className="font-medium text-[10px] text-red-500 dark:text-red-400">
+                ⚠️
+              </span>
+            )}
           </div>
-        </div>
-      )}
-    </div>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[260px] p-0" side="top" sideOffset={8}>
+          <div className="px-3 py-2.5 text-xs leading-relaxed">
+            <div className="mb-1.5 font-semibold text-[10px] tracking-wide opacity-50">
+              🎙️ 语音服务状态
+            </div>
+            <ServiceDetail label="TTS 文本→语音" services={ttsServices} />
+            <ServiceDetail label="STT 语音→文本" services={sttServices} />
+            {hasAlert && (
+              <div className="mt-1.5 border-t pt-1.5">
+                <div className="font-medium text-[10px] text-red-500 dark:text-red-400">
+                  ⚠️{" "}
+                  {isTtsDown && isSttDown
+                    ? "TTS 和 STT"
+                    : isTtsDown
+                      ? "TTS"
+                      : "STT"}{" "}
+                  服务不可用
+                  <br />
+                  <span className="opacity-70">
+                    请联系管理员，5分钟后自动重试
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
-function ServiceGroup({
+const PROVIDER_NAMES: Record<string, string> = {
+  minimax: "MiniMax",
+  zhipu: "智谱",
+  "zhipu-stt": "智谱",
+  groq: "Groq",
+};
+
+function displayProvider(p: string) {
+  return PROVIDER_NAMES[p] || p;
+}
+
+/** 紧凑状态标签（底部栏内联显示） */
+function ServiceBadge({
+  label,
+  service,
+  allDown,
+}: {
+  label: string;
+  service?: { provider: string; priority: number };
+  allDown: boolean;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="text-[10px] opacity-50">{label}:</span>
+      {service ? (
+        <>
+          <span className="inline-block h-[5px] w-[5px] rounded-full bg-green-500" />
+          <span className="text-[11px] opacity-85">
+            {displayProvider(service.provider)}
+          </span>
+          {service.priority > 1 && (
+            <span className="rounded bg-yellow-500/10 px-1 font-semibold text-[9px] text-yellow-600 dark:text-yellow-400">
+              降级
+            </span>
+          )}
+        </>
+      ) : allDown ? (
+        <>
+          <span className="inline-block h-[5px] w-[5px] rounded-full bg-red-500" />
+          <span className="text-[11px] text-red-500 opacity-85">故障</span>
+        </>
+      ) : null}
+    </span>
+  );
+}
+
+/** 详细服务列表（Tooltip 内展示） */
+function ServiceDetail({
   label,
   services,
 }: {
@@ -60,17 +148,6 @@ function ServiceGroup({
     priority: number;
   }>;
 }) {
-  // 显示的 provider 名称映射
-  const displayProvider = (p: string) => {
-    const map: Record<string, string> = {
-      minimax: "MiniMax",
-      zhipu: "智谱",
-      "zhipu-stt": "智谱",
-      groq: "Groq",
-    };
-    return map[p] || p;
-  };
-
   return (
     <div className="mb-1">
       <div className="mb-0.5 font-medium text-[10px] opacity-45">{label}</div>

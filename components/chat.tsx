@@ -37,7 +37,6 @@ import {
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
 import { useVoiceMode, type VoiceMode } from "./voice-mode-context";
-import { VoiceServiceStatus } from "./voice-service-status";
 
 export function Chat({
   id,
@@ -436,8 +435,6 @@ export function Chat({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <VoiceServiceStatus />
     </>
   );
 }

@@ -53,8 +53,14 @@ function useApiCallUsage(_refreshKey?: number) {
 export function ApiCallUsage({ refreshKey }: { refreshKey?: number }) {
   const usage = useApiCallUsage(refreshKey);
 
+  // 加载中：渲染同尺寸占位，防止 CLS
   if (!usage) {
-    return null;
+    return (
+      <div
+        className="flex items-center gap-1"
+        style={{ width: 28, height: 28 }}
+      />
+    );
   }
 
   const { used, max } = usage;
