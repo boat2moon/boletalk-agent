@@ -11,6 +11,7 @@
  */
 
 import { useMicVAD } from "@ricky0123/vad-react";
+// biome-ignore lint/performance/noNamespaceImport: ONNX Runtime requires namespace import to set ort.env.wasm.wasmPaths
 import * as ort from "onnxruntime-web/wasm";
 import { useCallback, useEffect, useRef, useState } from "react";
 

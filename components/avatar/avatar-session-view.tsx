@@ -396,6 +396,7 @@ export function AvatarSessionView({
       {/* 数字人视频区域 */}
       <div className="relative min-h-0 flex-1 bg-black">
         {/* SDK 会在这个 div 内自动创建 video 元素 */}
+        {/* biome-ignore lint/a11y/useSemanticElements: video container needs onClick for autoplay fallback */}
         <div
           className="avatar-video-container h-full w-full"
           onClick={() => {

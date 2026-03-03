@@ -20,7 +20,9 @@ import Client, {
   StartTimedResetOperateRequest,
   StopInstanceRequest,
 } from "@alicloud/avatar20220130";
+// biome-ignore lint/performance/noNamespaceImport: Alibaba Cloud SDK convention
 import * as $OpenApi from "@alicloud/openapi-client";
+// biome-ignore lint/performance/noNamespaceImport: Alibaba Cloud SDK convention
 import * as $Util from "@alicloud/tea-util";
 
 // ── 环境变量 ──────────────────────────────────────────────
