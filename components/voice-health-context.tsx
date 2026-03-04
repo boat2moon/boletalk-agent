@@ -100,18 +100,25 @@ function createInitialServices(): ServiceHealth[] {
       priority: 1,
     },
     {
+      name: "语音识别 2.0",
+      type: "stt",
+      provider: "doubao-stt",
+      status: "available",
+      priority: 2,
+    },
+    {
       name: "Whisper-V3",
       type: "stt",
       provider: "groq",
       status: "available",
-      priority: 2,
+      priority: 3,
     },
     {
       name: "GLM-ASR",
       type: "stt",
       provider: "zhipu-stt",
       status: "available",
-      priority: 3,
+      priority: 4,
     },
   ];
 }

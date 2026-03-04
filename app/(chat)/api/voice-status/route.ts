@@ -57,9 +57,7 @@ export function GET() {
     priority: 4,
   });
 
-  // === STT 服务 ===
-
-  // 阿里云实时语音识别 (首选 — 流式)
+  // 阿里云实时语音识别 (首选 — 前端流式)
   services.push({
     name: "实时语音识别",
     type: "stt",
@@ -68,22 +66,34 @@ export function GET() {
     priority: 1,
   });
 
-  // Groq Whisper (降级1)
+  // 豆包语音识别 2.0 (备选1 — 后端流式)
+  services.push({
+    name: "语音识别 2.0",
+    type: "stt",
+    provider: "豆包",
+    status:
+      process.env.DOUBAO_VOICE_APP_ID && process.env.DOUBAO_VOICE_ACCESS_TOKEN
+        ? "available"
+        : "unavailable",
+    priority: 2,
+  });
+
+  // Groq Whisper (备选2)
   services.push({
     name: "Whisper-V3",
     type: "stt",
     provider: "Groq",
     status: process.env.GROQ_API_KEY ? "available" : "unavailable",
-    priority: 2,
+    priority: 3,
   });
 
-  // 智谱 GLM-ASR (降级2)
+  // 智谱 GLM-ASR (备选3)
   services.push({
     name: "GLM-ASR",
     type: "stt",
     provider: "智谱",
     status: process.env.ZHIPU_API_KEY ? "available" : "unavailable",
-    priority: 3,
+    priority: 4,
   });
 
   return Response.json({ services });

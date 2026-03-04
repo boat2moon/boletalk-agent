@@ -63,6 +63,7 @@ const PurePreviewMessage = ({
     "ali-tts": "阿里云 TTS",
     "doubao-tts": "豆包 TTS",
     "ali-streaming": "阿里云 ASR",
+    "doubao-stt": "豆包 ASR",
     minimax: "MiniMax",
     zhipu: "智谱 TTS",
     "zhipu-stt": "智谱 ASR",

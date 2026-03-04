@@ -75,8 +75,11 @@ export function Chat({
 
   const { mutate } = useSWRConfig();
   const { voiceMode, setVoiceMode } = useVoiceMode();
-  const { speakBase64WithCache, endStreamingWithCache } =
-    useGlobalSpeechSynthesis();
+  const {
+    speakBase64WithCache,
+    endStreamingWithCache,
+    stop: stopSpeech,
+  } = useGlobalSpeechSynthesis();
   const { reportSuccess, reportFailure } = useVoiceHealth();
   const { setSttProvider, setTtsProvider, consumePendingStt } =
     useVoiceProvider();
@@ -106,6 +109,13 @@ export function Chat({
   useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
+
+  // 组件卸载时停止所有 TTS 音频播放（修复切换模式后声音残留）
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, [stopSpeech]);
 
   // Handle browser back/forward navigation
   useEffect(() => {
