@@ -1,27 +1,25 @@
 /**
  * Agent 公共模块
  *
- * 包含各 agent 共用的逻辑：
- * 1. createUsageFinishHandler - 处理 TokenLens enrichment 和 usage 更新的公共函数
- * 2. createDefaultStream - 默认的 streamText 调用逻辑（用于编程/面试相关的普通问答）
+ * 包含默认的 streamText 调用逻辑（用于编程/面试相关的普通问答）。
+ *
+ * 注意：createUsageFinishHandler 已迁移到 lib/ai/toolkit/usage.ts
+ * 本文件只负责 createDefaultStream 的实现。
  */
 
 import {
   convertToModelMessages,
-  type LanguageModelUsage,
   smoothStream,
   stepCountIs,
   streamText,
   type UIMessageStreamWriter,
 } from "ai";
-import { unstable_cache as cache } from "next/cache";
 import type { Session } from "next-auth";
-import type { ModelCatalog } from "tokenlens/core";
-import { fetchModels } from "tokenlens/fetch";
-import { getUsage } from "tokenlens/helpers";
 import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
+import { createUsageFinishHandler } from "@/lib/ai/toolkit/usage";
+import { ragSearchTool } from "@/lib/ai/tools/rag-search";
 // Tools 已注释，保留 import 注释以备后续开启
 // import { createDocument } from "@/lib/ai/tools/create-document";
 // import { getWeather } from "@/lib/ai/tools/get-weather";
@@ -30,106 +28,6 @@ import { myProvider } from "@/lib/ai/providers";
 import { isProductionEnvironment } from "@/lib/constants";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
-
-/**
- * 缓存 TokenLens 模型目录
- * 用于获取模型定价信息以计算 token 费用
- * 缓存 24 小时避免频繁请求
- */
-const getTokenlensCatalog = cache(
-  async (): Promise<ModelCatalog | undefined> => {
-    try {
-      return await fetchModels();
-    } catch (err) {
-      console.warn(
-        "TokenLens: catalog fetch failed, using default catalog",
-        err
-      );
-      return; // tokenlens helpers will fall back to defaultCatalog
-    }
-  },
-  ["tokenlens-catalog"],
-  { revalidate: 24 * 60 * 60 } // 24 hours
-);
-
-// ==================== 公共 Usage 处理函数 ====================
-
-export type CreateUsageFinishHandlerOptions = {
-  /** 模型 ID，用于 TokenLens 费用计算 */
-  modelId: string | undefined;
-  /** 数据流写入器，用于将 usage 数据推送到前端 */
-  dataStream: UIMessageStreamWriter<ChatMessage>;
-  /** 可选回调，当 usage 计算完成后通知外层更新 */
-  onUsageUpdate?: (usage: AppUsage) => void;
-};
-
-/**
- * 创建 usage finish 处理函数
- *
- * 这是一个公共函数，可以在不同的 agent stream 中复用。
- * 处理流程：
- * 1. 尝试获取 TokenLens 目录
- * 2. 用模型 ID + 原始 usage 计算费用
- * 3. 将最终 usage 写入 dataStream 推送给前端
- * 4. 如果有 onUsageUpdate 回调则调用它
- *
- * @returns 一个 onFinish 回调函数，签名为 ({usage}) => Promise<void>
- */
-export function createUsageFinishHandler({
-  modelId,
-  dataStream,
-  onUsageUpdate,
-}: CreateUsageFinishHandlerOptions) {
-  return async ({ usage }: { usage: LanguageModelUsage }) => {
-    try {
-      const providers = await getTokenlensCatalog();
-      // 如果没有 modelId，直接返回原始 usage
-      if (!modelId) {
-        const finalMergedUsage = usage;
-        dataStream.write({
-          type: "data-usage",
-          data: finalMergedUsage,
-        });
-        if (onUsageUpdate) {
-          onUsageUpdate(finalMergedUsage);
-        }
-        return;
-      }
-
-      // 如果 TokenLens 目录获取失败，返回原始 usage
-      if (!providers) {
-        const finalMergedUsage = usage;
-        dataStream.write({
-          type: "data-usage",
-          data: finalMergedUsage,
-        });
-        if (onUsageUpdate) {
-          onUsageUpdate(finalMergedUsage);
-        }
-        return;
-      }
-
-      // 使用 TokenLens 计算费用并合并到 usage
-      const summary = getUsage({ modelId, usage, providers });
-      const finalMergedUsage = {
-        ...usage,
-        ...summary,
-        modelId,
-      } as AppUsage;
-      dataStream.write({ type: "data-usage", data: finalMergedUsage });
-      if (onUsageUpdate) {
-        onUsageUpdate(finalMergedUsage);
-      }
-    } catch (err) {
-      console.warn("TokenLens enrichment failed", err);
-      const finalMergedUsage = usage;
-      dataStream.write({ type: "data-usage", data: finalMergedUsage });
-      if (onUsageUpdate) {
-        onUsageUpdate(finalMergedUsage);
-      }
-    }
-  };
-}
 
 // ==================== 默认 Stream 创建函数 ====================
 
@@ -150,8 +48,7 @@ export type CreateDefaultStreamOptions = {
  * 当消息不属于简历优化和模拟面试时，使用此函数处理。
  * 使用项目原有的 systemPrompt 和工具配置。
  *
- * 注意：原有的 getWeather/createDocument 等工具已注释掉，
- * 因为在当前项目中暂不需要这些工具。
+ * RAG 工具：ragSearch — LLM 自主决定是否需要检索知识库。
  */
 export function createDefaultStream({
   messages,
@@ -172,6 +69,7 @@ export function createDefaultStream({
       selectedChatModel === "chat-model-reasoning"
         ? []
         : [
+            "ragSearch",
             // "getWeather",
             // "createDocument",
             // "updateDocument",
@@ -179,6 +77,7 @@ export function createDefaultStream({
           ],
     experimental_transform: smoothStream({ chunking: "word" }),
     tools: {
+      ragSearch: ragSearchTool,
       // getWeather,
       // createDocument: createDocument({ session, dataStream }),
       // updateDocument: updateDocument({ session, dataStream }),

@@ -4,6 +4,7 @@ import type { ArtifactKind } from "@/components/artifact";
 import type { getBehaviouralQuestionsTool } from "./ai/tools/behavioural-questions";
 import type { createDocument } from "./ai/tools/create-document";
 import type { getWeather } from "./ai/tools/get-weather";
+import type { ragSearchTool } from "./ai/tools/rag-search";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
 import type { getResumeTemplateTool } from "./ai/tools/resume-template";
 import type { updateDocument } from "./ai/tools/update-document";
@@ -28,6 +29,7 @@ type getResumeTemplateToolType = InferUITool<typeof getResumeTemplateTool>;
 type getBehaviouralQuestionsToolType = InferUITool<
   typeof getBehaviouralQuestionsTool
 >;
+type ragSearchToolType = InferUITool<typeof ragSearchTool>;
 
 export type ChatTools = {
   getWeather: weatherTool;
@@ -36,6 +38,7 @@ export type ChatTools = {
   requestSuggestions: requestSuggestionsTool;
   getResumeTemplate: getResumeTemplateToolType;
   getBehaviouralQuestions: getBehaviouralQuestionsToolType;
+  ragSearch: ragSearchToolType;
 };
 
 export type CustomUIDataTypes = {

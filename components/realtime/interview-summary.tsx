@@ -12,7 +12,7 @@
 
 import { Clock, MessageSquare, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ResumeAnalysis } from "@/lib/ai/agent/resume-analyze";
+import type { ResumeAnalysis } from "@/lib/ai/toolkit/resume-analyzer";
 import type { TranscriptEntry } from "./realtime-page";
 
 export function InterviewSummary({

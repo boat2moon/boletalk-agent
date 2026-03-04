@@ -12,12 +12,12 @@
 
 import { z } from "zod";
 import { auth, type UserType } from "@/app/(auth)/auth";
+import { startAvatarInstance } from "@/lib/ai/avatar-client";
+import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import {
   analyzeResume,
   type ResumeAnalysis,
-} from "@/lib/ai/agent/resume-analyze";
-import { startAvatarInstance } from "@/lib/ai/avatar-client";
-import { entitlementsByUserType } from "@/lib/ai/entitlements";
+} from "@/lib/ai/toolkit/resume-analyzer";
 import {
   getChatApiCallCountByUserId,
   recordChatApiCall,

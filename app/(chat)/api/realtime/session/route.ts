@@ -13,13 +13,14 @@
 
 import { z } from "zod";
 import { auth, type UserType } from "@/app/(auth)/auth";
+import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { realtimeModels } from "@/lib/ai/realtime-models";
+import { buildInterviewPrompt } from "@/lib/ai/toolkit/prompt-builder";
 import {
   analyzeResume,
   buildRealtimePromptFromAnalysis,
   type ResumeAnalysis,
-} from "@/lib/ai/agent/resume-analyze";
-import { entitlementsByUserType } from "@/lib/ai/entitlements";
-import { realtimeModels } from "@/lib/ai/realtime-models";
+} from "@/lib/ai/toolkit/resume-analyzer";
 import {
   getChatApiCallCountByUserId,
   recordChatApiCall,
@@ -46,25 +47,8 @@ const BOLE_SERVER_WS_URL =
 const SESSION_SECRET =
   process.env.REALTIME_SESSION_SECRET || "dev-secret-change-me";
 
-/** 默认的模拟面试 system prompt（不上传简历时使用） */
-const DEFAULT_INTERVIEW_PROMPT = `你是一个专业的程序员面试官，擅长前端技术栈，包括 HTML、CSS、JavaScript、TypeScript、React、Vue、Node.js、小程序等技术。
-
-你正在进行一对一的实时语音模拟面试。请注意以下要求：
-
-1. 你的回复会直接转为语音播放，所以要口语化、自然、简洁
-2. 不要使用 Markdown 格式、代码块、表格等文字格式
-3. 每次回复控制在 3-5 句话以内
-4. 说话要像真实面试官一样，有亲和力但专业
-
-模拟面试流程：
-- 先让候选人自我介绍
-- 询问离职原因（如果不是应届生）
-- 出 2-3 道技术题（JS 基础、算法、场景设计）
-- 询问项目经历和挑战
-- 最后给出综合点评
-
-每道题候选人回答后，给出简短点评，然后继续下一题。
-全程最多 8-10 个问题，之后引导结束面试。`;
+/** 构建默认面试 prompt（不上传简历时使用） */
+const getDefaultInterviewPrompt = () => buildInterviewPrompt({ mode: "phone" });
 
 export async function POST(request: Request) {
   try {
@@ -112,14 +96,17 @@ export async function POST(request: Request) {
 
     // 4. 分析简历（如果提供了）
     let resumeAnalysis: ResumeAnalysis | null = null;
-    let interviewPrompt = DEFAULT_INTERVIEW_PROMPT;
+    let interviewPrompt = getDefaultInterviewPrompt();
 
     if (body.resumeText && body.resumeText.trim().length > 50) {
       try {
         resumeAnalysis = await analyzeResume(body.resumeText);
         // 将简历分析结果注入到面试官 prompt 中
         const resumeContext = buildRealtimePromptFromAnalysis(resumeAnalysis);
-        interviewPrompt = `${DEFAULT_INTERVIEW_PROMPT}\n\n${resumeContext}`;
+        interviewPrompt = buildInterviewPrompt({
+          mode: "phone",
+          resumeContext,
+        });
       } catch (err) {
         console.warn("简历分析失败，使用默认面试 prompt:", err);
         // 简历分析失败不阻断流程，使用默认 prompt

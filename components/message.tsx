@@ -4,7 +4,7 @@ import equal from "fast-deep-equal";
 import { memo, useState } from "react";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
-import { cn, sanitizeText } from "@/lib/utils";
+import { cn, highlightRefs, sanitizeText } from "@/lib/utils";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
@@ -95,7 +95,12 @@ const PurePreviewMessage = ({
         })}
       >
         {message.role === "assistant" && (
-          <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
+          <div
+            className={cn(
+              "-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border",
+              { "animate-pulse": isLoading }
+            )}
+          >
             <SparklesIcon size={14} />
           </div>
         )}
@@ -171,7 +176,11 @@ const PurePreviewMessage = ({
                           : undefined
                       }
                     >
-                      <Response>{sanitizeText(part.text)}</Response>
+                      <Response>
+                        {message.role === "assistant"
+                          ? highlightRefs(sanitizeText(part.text))
+                          : sanitizeText(part.text)}
+                      </Response>
                     </MessageContent>
                   </div>
                 );
@@ -324,6 +333,44 @@ const PurePreviewMessage = ({
               );
             }
 
+            if (type === "tool-ragSearch") {
+              const { toolCallId, state } = part;
+              const query =
+                "input" in part
+                  ? (part.input as { query?: string })?.query
+                  : undefined;
+              return (
+                <Tool defaultOpen={false} key={toolCallId}>
+                  <ToolHeader
+                    state={state}
+                    type={
+                      (query
+                        ? `🔍 检索: ${query}`
+                        : "🔍 知识库检索") as `tool-${string}`
+                    }
+                  />
+                  <ToolContent>
+                    {state === "output-available" && (
+                      <ToolOutput
+                        errorText={
+                          part.output?.found === false
+                            ? (part.output?.message ?? "未找到结果")
+                            : undefined
+                        }
+                        output={
+                          part.output?.found ? (
+                            <div className="text-muted-foreground text-xs">
+                              找到 {part.output.resultCount} 条参考资料
+                            </div>
+                          ) : null
+                        }
+                      />
+                    )}
+                  </ToolContent>
+                </Tool>
+              );
+            }
+
             return null;
           })}
 
@@ -387,7 +434,7 @@ export const ThinkingMessage = () => {
       data-role="assistant"
       data-testid="message-assistant-loading"
     >
-      <div className="flex items-start justify-start gap-3">
+      <div className="flex items-start justify-start gap-2 md:gap-3">
         <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
           <div className="animate-pulse">
             <SparklesIcon size={14} />
@@ -395,12 +442,12 @@ export const ThinkingMessage = () => {
         </div>
 
         <div className="flex w-full flex-col gap-2 md:gap-4">
-          <div className="flex items-center gap-1 p-0 text-muted-foreground text-sm">
-            <span className="animate-pulse">Thinking</span>
-            <span className="inline-flex">
-              <span className="animate-bounce [animation-delay:0ms]">.</span>
-              <span className="animate-bounce [animation-delay:150ms]">.</span>
-              <span className="animate-bounce [animation-delay:300ms]">.</span>
+          <div className="flex items-center gap-1.5 p-0 text-muted-foreground text-sm">
+            <span className="animate-pulse">思考中</span>
+            <span className="inline-flex gap-0.5">
+              <span className="inline-block size-[5px] animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:0ms]" />
+              <span className="inline-block size-[5px] animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:150ms]" />
+              <span className="inline-block size-[5px] animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:300ms]" />
             </span>
           </div>
         </div>
