@@ -32,6 +32,7 @@ export function CallView({
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [isMuted, setIsMuted] = useState(false);
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [callDuration, setCallDuration] = useState(0);
 
@@ -49,6 +50,10 @@ export function CallView({
   /** 聊天区域滚动容器 */
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const isMutedRef = useRef(false);
+  /** AI 说话状态延迟重置计时器 */
+  const agentSpeakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   // 同步 transcript ref + 自动滚动
   useEffect(() => {
@@ -217,12 +222,23 @@ export function CallView({
       // 更新下一个片段的开始时间
       nextPlayTimeRef.current = startTime + audioBuffer.duration;
 
-      // 追踪，用于打断时停止
+      // 追踪，用于打断时停止和判断是否播放完毕
       audioSourcesRef.current.push(bufferSource);
       bufferSource.onended = () => {
         audioSourcesRef.current = audioSourcesRef.current.filter(
           (s) => s !== bufferSource
         );
+        // 如果所有排队的音频都播完了，延迟一小段检查（避免分块之间的微小间隙导致动画闪烁）
+        if (audioSourcesRef.current.length === 0) {
+          if (agentSpeakingTimerRef.current) {
+            clearTimeout(agentSpeakingTimerRef.current);
+          }
+          agentSpeakingTimerRef.current = setTimeout(() => {
+            if (audioSourcesRef.current.length === 0) {
+              setIsAgentSpeaking(false);
+            }
+          }, 150); // 150ms 防抖
+        }
       };
     } catch (err) {
       console.error("[Audio] Playback error:", err);
@@ -271,14 +287,20 @@ export function CallView({
 
           case "audio":
             // 播放 AI 面试官的语音
+            if (agentSpeakingTimerRef.current) {
+              clearTimeout(agentSpeakingTimerRef.current);
+              agentSpeakingTimerRef.current = null;
+            }
             setIsAgentSpeaking(true);
+            setIsUserSpeaking(false);
             playAudio(msg.data, msg.mimeType);
             break;
 
           case "transcript":
-            // 最终确认的完整消息 — 替换或追加
+            // 最终确认的完整消息 — 替换、合并或追加
             setTranscript((prev) => {
               const last = prev.at(-1);
+              // 上一条是同角色的非最终消息 → 替换为最终版
               if (last && last.role === msg.role && !last.isFinal) {
                 return [
                   ...prev.slice(0, -1),
@@ -287,6 +309,22 @@ export function CallView({
                     text: msg.text,
                     timestamp: Date.now(),
                     isFinal: true,
+                  },
+                ];
+              }
+              // 同一轮 assistant 回复的后续句子 → 合并到同一条消息
+              if (
+                last &&
+                last.role === "assistant" &&
+                msg.role === "assistant" &&
+                last.isFinal
+              ) {
+                return [
+                  ...prev.slice(0, -1),
+                  {
+                    ...last,
+                    text: `${last.text}\n${msg.text}`,
+                    timestamp: Date.now(),
                   },
                 ];
               }
@@ -302,7 +340,14 @@ export function CallView({
             });
             break;
 
+          case "userSpeaking":
+            // 检测到用户正在说话
+            setIsUserSpeaking(true);
+            break;
+
           case "transcript_update":
+            // ASR 中间结果 — 用户仍在说话
+            setIsUserSpeaking(true);
             // ASR 中间结果
             setTranscript((prev) => {
               const last = prev.at(-1);
@@ -351,7 +396,9 @@ export function CallView({
             break;
 
           case "turnComplete":
-            setIsAgentSpeaking(false);
+            // 我们现在完全依靠音频的真实播放进度（bufferSource.onended）来结束跳动，
+            // 不需要在这里根据服务端事件来猜测，这里只重置用户说话状态。
+            setIsUserSpeaking(false);
             break;
 
           case "interrupted":
@@ -495,30 +542,64 @@ export function CallView({
 
         {(status === "connected" || status === "disconnected") && (
           <>
+            {/* 声波动画 keyframes */}
+            <style>{`
+              @keyframes bar-active {
+                0%, 100% { height: 6px; }
+                50% { height: 22px; }
+              }
+              @keyframes bar-idle {
+                0%, 100% { height: 6px; opacity: 0.35; }
+                50% { height: 10px; opacity: 0.55; }
+              }
+            `}</style>
+
             {/* 语音状态指示器 */}
-            <div className="flex items-center gap-3 py-2">
-              <div className="flex items-center gap-1.5">
-                {SOUND_BARS.map((i) => (
-                  <div
-                    className={`w-1 rounded-full bg-primary transition-all duration-300 ${
-                      isAgentSpeaking ? "animate-pulse" : "h-1.5 opacity-30"
-                    }`}
-                    key={`bar-${i}`}
-                    style={{
-                      height: isAgentSpeaking
-                        ? `${8 + Math.random() * 16}px`
-                        : "6px",
-                      animationDelay: `${i * 100}ms`,
-                    }}
-                  />
-                ))}
+            <div className="flex items-center gap-3 rounded-full border bg-muted/50 px-5 py-2.5 shadow-sm">
+              <div className="flex h-6 items-center gap-1.5">
+                {SOUND_BARS.map((i) => {
+                  const isActive = isAgentSpeaking || isUserSpeaking;
+                  return (
+                    <div
+                      className={`w-1.5 rounded-full ${
+                        isAgentSpeaking
+                          ? "bg-primary"
+                          : isUserSpeaking
+                            ? "bg-blue-500"
+                            : "bg-muted-foreground"
+                      }`}
+                      key={`bar-${i}`}
+                      style={{
+                        animationName: isActive ? "bar-active" : "bar-idle",
+                        animationDuration: isActive
+                          ? `${0.4 + i * 0.08}s`
+                          : `${1.8 + i * 0.2}s`,
+                        animationTimingFunction: "ease-in-out",
+                        animationIterationCount: "infinite",
+                        animationDelay: `${i * 100}ms`,
+                      }}
+                    />
+                  );
+                })}
               </div>
-              <span className="text-muted-foreground text-xs">
+              <span
+                className={`font-medium text-sm ${
+                  isAgentSpeaking
+                    ? "text-primary"
+                    : isUserSpeaking
+                      ? "text-blue-500"
+                      : status === "disconnected"
+                        ? "text-muted-foreground"
+                        : "text-foreground"
+                }`}
+              >
                 {isAgentSpeaking
                   ? "面试官正在说话..."
-                  : status === "disconnected"
-                    ? "面试已结束"
-                    : "请开始回答"}
+                  : isUserSpeaking
+                    ? "正在聆听..."
+                    : status === "disconnected"
+                      ? "面试已结束"
+                      : "等待用户说话"}
               </span>
             </div>
 
@@ -561,7 +642,7 @@ export function CallView({
                 ))}
 
                 {/* 面试官正在输入的提示 */}
-                {isAgentSpeaking && (
+                {isAgentSpeaking && transcript.at(-1)?.role !== "assistant" && (
                   <div className="flex items-start gap-2 md:gap-3">
                     <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
                       <div className="animate-pulse">
