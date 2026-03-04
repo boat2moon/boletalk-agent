@@ -18,8 +18,8 @@ import {
   type ChatHistory,
   getChatHistoryPaginationKey,
 } from "@/components/sidebar-history";
-import type { ResumeAnalysis } from "@/lib/ai/agent/resume-analyze";
 import { DEFAULT_REALTIME_MODEL } from "@/lib/ai/realtime-models";
+import type { ResumeAnalysis } from "@/lib/ai/toolkit/resume-analyzer";
 import { generateUUID } from "@/lib/utils";
 import { CallView } from "./call-view";
 import { InterviewSummary } from "./interview-summary";

@@ -15,8 +15,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAvatarVoice, type VoiceStatus } from "@/hooks/use-avatar-voice";
-import type { ResumeAnalysis } from "@/lib/ai/agent/resume-analyze";
-import { buildRealtimePromptFromAnalysis } from "@/lib/ai/agent/resume-analyze";
+import {
+  buildRealtimePromptFromAnalysis,
+  type ResumeAnalysis,
+} from "@/lib/ai/toolkit/resume-analyzer";
 import type { AvatarChannel, AvatarMessage } from "./avatar-page";
 
 // ── BroadcastingAvatarSDK 类型声明 ──────────────────────────────

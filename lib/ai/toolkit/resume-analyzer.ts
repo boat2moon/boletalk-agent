@@ -1,16 +1,17 @@
 /**
- * 简历分析 Agent（用于高级语音模拟面试的准备阶段）
+ * 简历分析工具（共享工具层）
+ *
+ * 从 lib/ai/agent/resume-analyze.ts 迁移而来。
+ * 作为共享工具，供多个子 Agent 和 API 路由使用：
+ * - Phone 模式：/api/realtime/session 路由
+ * - Avatar 模式：/api/avatar/start 路由、avatar-agent
+ * - 未来：RAG 管线中的简历关联检索
  *
  * 工作流程：
  * 1. 接收用户上传的简历文本
  * 2. 使用便宜的文本模型（chat-model-glm）分析简历
  * 3. 输出结构化的面试上下文
- * 4. 该上下文会被注入到 Realtime 模型的 system prompt 中
- *
- * 这样做的好处：
- * - 复用文本模型的分析能力，成本极低
- * - 生成的结构化数据可以让 Realtime 面试官有针对性地提问
- * - 是连接"文本 Agent 世界"和"Realtime 语音世界"的桥梁
+ * 4. 该上下文可被注入到任意模式的 system prompt 中
  */
 
 import { generateObject } from "ai";
@@ -83,9 +84,12 @@ export async function analyzeResume(
 }
 
 /**
- * 将简历分析结果转换为 Realtime 面试官的 system prompt 片段
+ * 将简历分析结果转换为面试官的 system prompt 片段
  *
- * 这个 prompt 会被注入到 Gemini Live API 的 systemInstruction 中
+ * 这个 prompt 片段可以被注入到任意模式的面试官 system prompt 中：
+ * - Phone 模式：注入到 Doubao Realtime API 的 systemInstruction
+ * - Avatar 模式：注入到 AVATAR_INTERVIEW_PROMPT 的 resumeContext
+ * - 未来：Text/Voice 模拟面试也可以使用
  */
 export function buildRealtimePromptFromAnalysis(
   analysis: ResumeAnalysis

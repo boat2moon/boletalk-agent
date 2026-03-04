@@ -71,6 +71,13 @@
       "when": 1772445557800,
       "tag": "0009_add-chat-type",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1772849000000,
+      "tag": "0010_add-rag-chunks",
+      "breakpoints": true
     }
   ]
 }

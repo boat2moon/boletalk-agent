@@ -97,6 +97,27 @@ export function sanitizeText(text: string) {
   return text.replace('<has_function_call>', '');
 }
 
+/**
+ * 将 [REF-N] 或 [REF-N, REF-M] 形式的引用标注转为带样式的上标 HTML 标签
+ * 支持锚点跳转到文末引用列表
+ */
+// biome-ignore lint/performance/useTopLevelRegex: exported utility
+const REF_PATTERN = /\[REF-(\d+)(?:,\s*REF-(\d+))*\]/g;
+
+export function highlightRefs(text: string): string {
+  return text.replace(REF_PATTERN, (match) => {
+    // 提取所有 REF 编号
+    const nums = [...match.matchAll(/REF-(\d+)/g)].map((m) => m[1]);
+    const badges = nums
+      .map(
+        (n) =>
+          `<sup><span style="display:inline-block;padding:0 4px;margin:0 1px;font-size:11px;line-height:16px;border-radius:4px;background:#e0edff;color:#006cff;font-weight:500;vertical-align:super;cursor:default;">${n}</span></sup>`
+      )
+      .join("");
+    return badges;
+  });
+}
+
 export function convertToUIMessages(messages: DBMessage[]): ChatMessage[] {
   return messages.map((message) => ({
     id: message.id,

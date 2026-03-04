@@ -18,7 +18,7 @@ import {
   type ChatHistory,
   getChatHistoryPaginationKey,
 } from "@/components/sidebar-history";
-import type { ResumeAnalysis } from "@/lib/ai/agent/resume-analyze";
+import type { ResumeAnalysis } from "@/lib/ai/toolkit/resume-analyzer";
 import { generateUUID } from "@/lib/utils";
 import { AvatarPreparationView } from "./avatar-preparation-view";
 import { AvatarSessionView } from "./avatar-session-view";

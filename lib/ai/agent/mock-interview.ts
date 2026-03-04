@@ -6,8 +6,9 @@
  * 2. 项目介绍 → 项目挑战 → 性能优化
  * 3. 最后给出综合点评
  *
- * 集成了 getBehaviouralQuestions tool：
- * 当用户提问到 HR 行为面试时，从面试派网站获取真实面试题
+ * 集成了两个 tool：
+ * - getBehaviouralQuestions：从面试派获取 HR 行为面试题
+ * - ragSearch：从知识库检索面试相关参考资料
  */
 
 import {
@@ -15,9 +16,11 @@ import {
   streamText,
   type UIMessageStreamWriter,
 } from "ai";
-import { createUsageFinishHandler } from "@/lib/ai/agent/common";
 import { myProvider } from "@/lib/ai/providers";
+import { buildVoiceConstraint } from "@/lib/ai/toolkit/prompt-builder";
+import { createUsageFinishHandler } from "@/lib/ai/toolkit/usage";
 import { getBehaviouralQuestionsTool } from "@/lib/ai/tools/behavioural-questions";
+import { ragSearchTool } from "@/lib/ai/tools/rag-search";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 
@@ -39,6 +42,7 @@ export type CreateMockInterviewStreamOptions = {
  * - 具体的提问顺序和内容
  * - 每道题的点评标准
  * - HR 行为面试 tool 的使用说明
+ * - RAG 知识库检索 tool 的使用说明
  */
 export function createMockInterviewStream({
   messages,
@@ -51,6 +55,8 @@ export function createMockInterviewStream({
 你的任务是进行模拟面试，帮助用户准备真实的面试场景。
 
 当用户提问到 HR 行为面试时，要使用 getBehaviouralQuestions 工具来获取行为面试题和答案，然后基于获取的内容来回答用户的问题。
+
+当你需要出技术面试题，或者需要参考资料来点评用户的回答时，可以使用 ragSearch 工具从知识库检索相关内容。检索时建议将 category 设置为"面试题"来获取更精准的结果。
 
 每次模拟面试最多 8-10 个问题，达到 8 个问题时，就要引导用户：你还有什么问题要问我？
 接下来就要引导用户结束面试，你要给出本次面试的综合点评。
@@ -78,8 +84,7 @@ export function createMockInterviewStream({
 - 项目性能优化，最好能有具体的例子和量化指标`;
 
   if (voiceMode) {
-    systemPrompt +=
-      "\n\n[语音模式特殊要求]：用户正在通过语音与你交流。你的回答必须口语化、简洁自然，就像面对面聊天一样。请绝对避免生成复杂的 Markdown 格式（如长列表、表格、代码块等），尽量用纯文本交流。直接给结论，不要超过 3-5 句。";
+    systemPrompt += `\n\n${buildVoiceConstraint()}`;
   }
 
   const model = myProvider.languageModel("chat-model");
@@ -88,10 +93,11 @@ export function createMockInterviewStream({
     model,
     system: systemPrompt,
     messages: convertToModelMessages(messages),
-    // 启用行为面试题 tool
-    experimental_activeTools: ["getBehaviouralQuestions"],
+    // 启用行为面试题 tool 和 RAG 检索 tool
+    experimental_activeTools: ["getBehaviouralQuestions", "ragSearch"],
     tools: {
       getBehaviouralQuestions: getBehaviouralQuestionsTool,
+      ragSearch: ragSearchTool,
     },
     onFinish: createUsageFinishHandler({
       modelId: model.modelId,
