@@ -22,6 +22,8 @@ import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
+import { useVoiceMode } from "./voice-mode-context";
+import { useVoiceProvider } from "./voice-provider-context";
 import { Weather } from "./weather";
 
 const PurePreviewMessage = ({
@@ -50,6 +52,34 @@ const PurePreviewMessage = ({
   );
 
   useDataStream();
+
+  const { voiceMode } = useVoiceMode();
+  const { getProvider } = useVoiceProvider();
+  const providerInfo =
+    voiceMode === "voice" ? getProvider(message.id) : undefined;
+
+  /** provider key → 用户可读名 */
+  const PROVIDER_LABEL: Record<string, string> = {
+    "ali-tts": "阿里云 TTS",
+    "doubao-tts": "豆包 TTS",
+    "ali-streaming": "阿里云 ASR",
+    minimax: "MiniMax",
+    zhipu: "智谱 TTS",
+    "zhipu-stt": "智谱 ASR",
+    groq: "Groq",
+  };
+  const providerLabel = (() => {
+    if (!providerInfo) {
+      return null;
+    }
+    if (message.role === "user" && providerInfo.stt) {
+      return `🎙️ ${PROVIDER_LABEL[providerInfo.stt] || providerInfo.stt}`;
+    }
+    if (message.role === "assistant" && providerInfo.tts) {
+      return `🔊 ${PROVIDER_LABEL[providerInfo.tts] || providerInfo.tts}`;
+    }
+    return null;
+  })();
 
   return (
     <div
@@ -295,6 +325,20 @@ const PurePreviewMessage = ({
 
             return null;
           })}
+
+          {providerLabel && (
+            <div
+              className={cn(
+                "text-[10px] text-muted-foreground/60 leading-tight",
+                {
+                  "text-right": message.role === "user",
+                  "text-left": message.role === "assistant",
+                }
+              )}
+            >
+              {providerLabel}
+            </div>
+          )}
 
           {!isReadonly && (
             <MessageActions

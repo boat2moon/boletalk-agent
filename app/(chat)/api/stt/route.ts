@@ -1,11 +1,52 @@
 /**
  * STT API 路由
- * 优先使用极速的 Groq (Whisper-large-v3) 将音频转为文本
- * 失败则自动降级到智谱 GLM-ASR
+ * 优先使用豆包流式语音识别 2.0（WebSocket 流式输入模式）
+ * 降级1：Groq (Whisper-large-v3)
+ * 降级2：智谱 GLM-ASR
  * 响应头包含 X-Voice-Provider 和 X-Voice-Degraded 供前端健康追踪
  */
 
+import { recognizeSpeechStream } from "@/lib/ai/doubao-stt";
+
 export const maxDuration = 30;
+
+/**
+ * 尝试通过豆包流式语音识别 2.0 识别
+ */
+async function tryDoubao(audioFile: File): Promise<Response | null> {
+  const appId = process.env.DOUBAO_VOICE_APP_ID;
+  const accessToken = process.env.DOUBAO_VOICE_ACCESS_TOKEN;
+  if (!appId || !accessToken) {
+    return null;
+  }
+
+  // 豆包只支持 pcm/wav/ogg/mp3，不支持 webm
+  const fileName = audioFile.name || "";
+  if (fileName.endsWith(".webm") || audioFile.type?.includes("webm")) {
+    console.warn("[doubao-stt] Skipping: webm format not supported");
+    return null;
+  }
+
+  try {
+    const arrayBuffer = await audioFile.arrayBuffer();
+    const audioBuffer = Buffer.from(new Uint8Array(arrayBuffer));
+
+    // 判断格式：默认 wav
+    const format: "wav" | "pcm" = fileName.endsWith(".pcm") ? "pcm" : "wav";
+
+    const text = await recognizeSpeechStream(audioBuffer, format);
+
+    if (text?.trim()) {
+      return Response.json({ text });
+    }
+
+    console.warn("[doubao-stt] Empty result");
+    return null;
+  } catch (error) {
+    console.warn("[doubao-stt] Error:", error);
+    return null;
+  }
+}
 
 /**
  * 尝试通过 Groq API (Whisper-large-v3) 识别
@@ -102,15 +143,24 @@ export async function POST(request: Request) {
 
   const degraded: string[] = [];
 
-  // 1. 优先 Groq
+  // 1. 优先豆包流式 STT
+  const doubaoResult = await tryDoubao(audioFile);
+  if (doubaoResult) {
+    doubaoResult.headers.set("X-Voice-Provider", "doubao-stt");
+    return doubaoResult;
+  }
+  degraded.push("doubao-stt");
+
+  // 2. 降级到 Groq
   const groqResult = await tryGroqWhisper(audioFile);
   if (groqResult) {
     groqResult.headers.set("X-Voice-Provider", "groq");
+    groqResult.headers.set("X-Voice-Degraded", degraded.join(","));
     return groqResult;
   }
   degraded.push("groq");
 
-  // 2. 降级到智谱（不支持 webm）
+  // 3. 降级到智谱（不支持 webm）
   const fileName = audioFile.name || "";
   if (!fileName.endsWith(".webm")) {
     const zhipuResult = await fallbackZhipuAsr(audioFile);
@@ -122,7 +172,7 @@ export async function POST(request: Request) {
   }
   degraded.push("zhipu");
 
-  // 3. 全部失败
+  // 4. 全部失败
   return new Response("All STT services unavailable", {
     status: 503,
     headers: {

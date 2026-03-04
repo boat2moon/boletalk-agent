@@ -41,30 +41,33 @@ async function tryMiniMax(text: string): Promise<Buffer | null> {
   }
 
   try {
-    const response = await fetch("https://api.minimaxi.com/v1/t2a_v2", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "speech-02-turbo",
-        text: text.slice(0, 5000),
-        stream: false,
-        voice_setting: {
-          voice_id: "male-qn-qingse",
-          speed: 1,
-          vol: 1,
-          pitch: 0,
+    const response = await fetch(
+      "https://api.minimaxi.com/v1/t2a_v2?GroupId=2028066404082651879",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-        audio_setting: {
-          sample_rate: 32_000,
-          bitrate: 128_000,
-          format: "mp3",
-          channel: 1,
-        },
-      }),
-    });
+        body: JSON.stringify({
+          model: "speech-02-turbo",
+          text: text.slice(0, 5000),
+          stream: false,
+          voice_setting: {
+            voice_id: "male-qn-qingse",
+            speed: 1,
+            vol: 1,
+            pitch: 0,
+          },
+          audio_setting: {
+            sample_rate: 32_000,
+            bitrate: 128_000,
+            format: "mp3",
+            channel: 1,
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       console.warn("MiniMax TTS failed:", response.status);

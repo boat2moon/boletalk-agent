@@ -6,6 +6,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { useVoiceHealth } from "./voice-health-context";
 import { useVoiceMode } from "./voice-mode-context";
 
@@ -90,11 +91,16 @@ export function VoiceServiceStatus() {
 }
 
 const PROVIDER_NAMES: Record<string, string> = {
+  "ali-tts": "阿里云",
+  "doubao-tts": "豆包",
+  "ali-streaming": "阿里云",
   minimax: "MiniMax",
   zhipu: "智谱",
   "zhipu-stt": "智谱",
   groq: "Groq",
 };
+
+const STREAMING_PROVIDERS = new Set(["ali-tts", "doubao-tts", "ali-streaming"]);
 
 function displayProvider(p: string) {
   return PROVIDER_NAMES[p] || p;
@@ -110,6 +116,9 @@ function ServiceBadge({
   service?: { provider: string; priority: number };
   allDown: boolean;
 }) {
+  const isStreaming = service
+    ? STREAMING_PROVIDERS.has(service.provider)
+    : false;
   return (
     <span className="inline-flex items-center gap-1">
       <span className="text-[10px] opacity-50">{label}:</span>
@@ -119,9 +128,19 @@ function ServiceBadge({
           <span className="text-[11px] opacity-85">
             {displayProvider(service.provider)}
           </span>
+          <span
+            className={cn(
+              "rounded px-1 font-semibold text-[9px]",
+              isStreaming
+                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                : "bg-gray-500/10 text-gray-500 dark:text-gray-400"
+            )}
+          >
+            {isStreaming ? "流式" : "普通"}
+          </span>
           {service.priority > 1 && (
             <span className="rounded bg-yellow-500/10 px-1 font-semibold text-[9px] text-yellow-600 dark:text-yellow-400">
-              降级
+              备选
             </span>
           )}
         </>
@@ -167,9 +186,14 @@ function ServiceDetail({
               首选
             </span>
           )}
+          {STREAMING_PROVIDERS.has(s.provider) && (
+            <span className="rounded bg-blue-500/10 px-1 font-semibold text-[9px] text-blue-600 dark:text-blue-400">
+              流式
+            </span>
+          )}
           {s.status === "available" && s.priority > 1 && (
             <span className="rounded bg-yellow-500/10 px-1 font-semibold text-[9px] text-yellow-600 dark:text-yellow-400">
-              降级
+              备选
             </span>
           )}
           {s.status === "failed" && (

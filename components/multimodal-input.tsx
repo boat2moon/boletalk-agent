@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import { SelectItem } from "@/components/ui/select";
+import { useAliStreamingSTT } from "@/hooks/use-ali-streaming-stt";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { chatModels } from "@/lib/ai/models";
 import type { Attachment, ChatMessage } from "@/lib/types";
@@ -45,6 +46,7 @@ import { Button } from "./ui/button";
 import type { VisibilityType } from "./visibility-selector";
 import { useVoiceHealth } from "./voice-health-context";
 import { useVoiceMode } from "./voice-mode-context";
+import { useVoiceProvider } from "./voice-provider-context";
 import { VoiceServiceStatus } from "./voice-service-status";
 
 // 将文件读取为 base64 字符串的工具函数
@@ -81,6 +83,7 @@ function PureMultimodalInput({
   selectedVisibilityType,
   selectedModelId,
   onModelChange,
+  onStreamingTextChange,
 }: {
   chatId: string;
   input: string;
@@ -96,11 +99,13 @@ function PureMultimodalInput({
   selectedVisibilityType: VisibilityType;
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
+  onStreamingTextChange?: (text: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
   const { voiceMode } = useVoiceMode();
   const { isTtsDown, isSttDown } = useVoiceHealth();
+  const { setPendingStt } = useVoiceProvider();
   const {
     startListening,
     stopListening,
@@ -109,11 +114,30 @@ function PureMultimodalInput({
     isProcessing,
   } = useSpeechRecognition();
 
+  // 流式 STT hook（预连接架构）
+  const streamingSTT = useAliStreamingSTT();
+  const isStreamingConnected = streamingSTT.connectionStatus === "ready";
+  const isStreamingFailed = streamingSTT.connectionStatus === "failed";
+
   // 语音不可用时阻止录音
   const voiceUnavailable = isTtsDown || isSttDown;
 
+  // 进入/离开语音模式时自动连接/断开流式 STT
+  useEffect(() => {
+    if (voiceMode === "voice") {
+      streamingSTT.connect();
+    } else {
+      streamingSTT.disconnect();
+    }
+  }, [voiceMode, streamingSTT.connect, streamingSTT.disconnect]);
+
+  // 通知父组件流式文本变化
+  useEffect(() => {
+    onStreamingTextChange?.(streamingSTT.isRecording ? streamingSTT.text : "");
+  }, [streamingSTT.isRecording, streamingSTT.text, onStreamingTextChange]);
+
   // 语音模式：长按录音处理
-  const handleVoiceStart = useCallback(() => {
+  const handleVoiceStart = useCallback(async () => {
     if (status !== "ready") {
       return;
     }
@@ -121,16 +145,60 @@ function PureMultimodalInput({
       toast.error("语音服务暂时不可用，请联系管理员或稍后重试");
       return;
     }
+
+    // 流式连接可用 → 使用流式模式
+    if (isStreamingConnected) {
+      const ok = await streamingSTT.startRecording();
+      if (ok) {
+        return;
+      }
+    }
+
+    // 降级到传统模式
     startListening();
-  }, [status, startListening, voiceUnavailable]);
+  }, [
+    status,
+    startListening,
+    voiceUnavailable,
+    isStreamingConnected,
+    streamingSTT,
+  ]);
 
   const handleVoiceEnd = useCallback(async () => {
+    if (streamingSTT.isRecording) {
+      // 流式模式：等待最终结果
+      const streamingText = await streamingSTT.stopRecording();
+
+      if (streamingText.trim()) {
+        setPendingStt("ali-streaming");
+        window.history.pushState({}, "", `/chat/${chatId}`);
+        sendMessage({
+          role: "user",
+          parts: [
+            ...attachments.map((attachment) => ({
+              type: "file" as const,
+              url: attachment.url,
+              base64: attachment.base64,
+              name: attachment.name,
+              mediaType: attachment.contentType,
+            })),
+            { type: "text", text: streamingText },
+          ],
+        });
+        setAttachments([]);
+      } else {
+        toast.error("未识别到语音内容，请重试");
+      }
+      return;
+    }
+
+    // 传统模式
     if (!isListening) {
       return;
     }
     const text = await stopListening();
     if (text.trim()) {
-      // 自动发送识别出的文字
+      setPendingStt("groq");
       window.history.pushState({}, "", `/chat/${chatId}`);
       sendMessage({
         role: "user",
@@ -152,10 +220,12 @@ function PureMultimodalInput({
   }, [
     isListening,
     stopListening,
+    streamingSTT,
     chatId,
     sendMessage,
     attachments,
     setAttachments,
+    setPendingStt,
   ]);
 
   const adjustHeight = useCallback(() => {
@@ -376,7 +446,9 @@ function PureMultimodalInput({
     <div className={cn("relative flex w-full flex-col gap-4", className)}>
       {messages.length === 0 &&
         attachments.length === 0 &&
-        uploadQueue.length === 0 && (
+        uploadQueue.length === 0 &&
+        !streamingSTT.isRecording &&
+        !isListening && (
           <SuggestedActions
             chatId={chatId}
             selectedVisibilityType={selectedVisibilityType}
@@ -430,34 +502,54 @@ function PureMultimodalInput({
               ))}
             </div>
           )}
-          {/* 录音状态提示 */}
-          <div className="text-center text-muted-foreground text-xs">
-            {isProcessing
-              ? "正在识别..."
-              : isListening
-                ? "松开结束录音"
-                : "按住说话"}
+          {/* 流式识别预览气泡由 chat.tsx 在消息列表中渲染 */}
+
+          {/* 连接状态 + 录音状态提示 */}
+          <div className="min-h-[1.5em] max-w-[80%] text-center text-muted-foreground text-xs">
+            {streamingSTT.connectionStatus === "connecting" ? (
+              <span className="flex items-center justify-center gap-1">
+                <span className="size-1.5 animate-pulse rounded-full bg-yellow-500" />
+                正在连接高速语音服务...
+              </span>
+            ) : isProcessing ? (
+              "正在识别..."
+            ) : isListening || streamingSTT.isRecording ? (
+              "松开结束录音"
+            ) : isStreamingFailed ? (
+              <span className="text-yellow-600">低速语音模式</span>
+            ) : (
+              "按住说话"
+            )}
           </div>
 
           {/* 录音按钮 */}
           <button
             className={cn(
               "flex size-16 select-none items-center justify-center rounded-full border-2 transition-all duration-200",
-              isListening
+              isListening || streamingSTT.isRecording
                 ? "scale-110 border-red-500 bg-red-500/10 text-red-500 shadow-lg shadow-red-500/20"
                 : isProcessing
                   ? "border-muted bg-muted text-muted-foreground"
                   : "border-primary bg-primary/5 text-primary hover:bg-primary/10 active:scale-95"
             )}
             data-testid="voice-record-button"
-            disabled={status !== "ready" || isProcessing}
+            disabled={
+              status !== "ready" ||
+              isProcessing ||
+              voiceUnavailable ||
+              streamingSTT.connectionStatus === "connecting"
+            }
             onPointerDown={(e) => {
               e.preventDefault();
               handleVoiceStart();
             }}
             onPointerLeave={() => {
               // 手指滑出按钮时取消录音
-              if (isListening) {
+              if (streamingSTT.isRecording) {
+                streamingSTT.disconnect();
+                streamingSTT.connect();
+                toast.info("已取消录音");
+              } else if (isListening) {
                 cancelListening();
                 toast.info("已取消录音");
               }
@@ -468,7 +560,11 @@ function PureMultimodalInput({
             }}
             type="button"
           >
-            <div className={cn(isListening && "animate-pulse")}>
+            <div
+              className={cn(
+                (isListening || streamingSTT.isRecording) && "animate-pulse"
+              )}
+            >
               <MicIcon size={24} />
             </div>
           </button>
