@@ -30,8 +30,8 @@ type VoiceProviderContextType = {
 };
 
 const VoiceProviderContext = createContext<VoiceProviderContextType>({
-  getProvider: () => {
-    /* noop */
+  getProvider: (): VoiceProviderInfo | undefined => {
+    return;
   },
   setSttProvider: () => {
     /* noop */
