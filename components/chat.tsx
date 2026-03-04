@@ -36,7 +36,9 @@ import {
 } from "./sidebar-history";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
+import { useVoiceHealth } from "./voice-health-context";
 import { useVoiceMode, type VoiceMode } from "./voice-mode-context";
+import { useVoiceProvider } from "./voice-provider-context";
 
 export function Chat({
   id,
@@ -73,7 +75,11 @@ export function Chat({
 
   const { mutate } = useSWRConfig();
   const { voiceMode, setVoiceMode } = useVoiceMode();
-  const { speakBase64WithCache } = useGlobalSpeechSynthesis();
+  const { speakBase64WithCache, endStreamingWithCache } =
+    useGlobalSpeechSynthesis();
+  const { reportSuccess, reportFailure } = useVoiceHealth();
+  const { setSttProvider, setTtsProvider, consumePendingStt } =
+    useVoiceProvider();
   const voiceModeRef = useRef(voiceMode);
 
   // 加载已有会话时，同步 voiceMode 到该会话的 chatType
@@ -265,8 +271,36 @@ export function Chat({
           lastMsg?.role === "assistant" ? lastMsg.id : "unknown";
         speakBase64WithCache(messageId, audioBase64, mimeType);
       }
+      // 流式 TTS 健康上报（自定义 data stream 类型）
+      if (
+        (dataPart as any).type === "data-ttsProvider" &&
+        voiceModeRef.current === "voice"
+      ) {
+        const { provider, degraded } = (dataPart as any).data as {
+          provider: string;
+          degraded: string[];
+        };
+        if (degraded.length > 0) {
+          for (const d of degraded) {
+            reportFailure(d);
+          }
+        }
+        if (provider) {
+          reportSuccess(provider, degraded);
+        }
+
+        // 关联 TTS provider 到当前 assistant 消息
+        const lastAssistantMsg = messagesRef.current?.at(-1);
+        if (lastAssistantMsg?.role === "assistant" && provider) {
+          setTtsProvider(lastAssistantMsg.id, provider);
+        }
+      }
     },
     onFinish: () => {
+      // 标记流式 TTS 结束，让 MediaSource 正确 endOfStream
+      if (voiceModeRef.current === "voice") {
+        endStreamingWithCache();
+      }
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
@@ -304,7 +338,20 @@ export function Chat({
   // 同步 messagesRef 以便 onData 中能获取最新消息
   useEffect(() => {
     messagesRef.current = messages;
-  }, [messages]);
+
+    // 消费 pending STT provider：当新增用户消息时关联 STT provider
+    if (voiceModeRef.current === "voice" && messages.length > 0) {
+      const lastUserMsg = [...messages]
+        .reverse()
+        .find((m) => m.role === "user");
+      if (lastUserMsg) {
+        const pending = consumePendingStt();
+        if (pending) {
+          setSttProvider(lastUserMsg.id, pending);
+        }
+      }
+    }
+  }, [messages, consumePendingStt, setSttProvider]);
 
   // 通知父组件“是否有活跃会话”的状态变化
   useEffect(() => {
@@ -334,6 +381,7 @@ export function Chat({
   );
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [streamingText, setStreamingText] = useState("");
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
 
   useAutoResume({
@@ -359,7 +407,19 @@ export function Chat({
           chatId={id}
           isArtifactVisible={isArtifactVisible}
           isReadonly={isReadonly}
-          messages={messages}
+          messages={
+            streamingText
+              ? [
+                  ...messages,
+                  {
+                    id: "streaming-preview",
+                    role: "user",
+                    content: streamingText,
+                    parts: [{ type: "text", text: streamingText }],
+                  } as ChatMessage,
+                ]
+              : messages
+          }
           regenerate={regenerate}
           selectedModelId={initialChatModel}
           setMessages={setMessages}
@@ -375,6 +435,7 @@ export function Chat({
               input={input}
               messages={messages}
               onModelChange={setCurrentModelId}
+              onStreamingTextChange={setStreamingText}
               selectedModelId={currentModelId}
               selectedVisibilityType={visibilityType}
               sendMessage={wrappedSendMessage}

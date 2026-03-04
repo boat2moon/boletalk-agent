@@ -20,6 +20,8 @@ type SpeechSynthesisContextType = ReturnType<typeof useSpeechSynthesis> & {
   playFromCache: (messageId: string) => boolean;
   /** 检查某条消息是否有缓存 */
   hasCache: (messageId: string) => boolean;
+  /** 标记流式 TTS 结束 */
+  endStreamingWithCache: () => void;
 };
 
 const SpeechSynthesisContext = createContext<
@@ -109,11 +111,16 @@ export function SpeechSynthesisProvider({ children }: { children: ReactNode }) {
     return !!blobs && blobs.length > 0;
   }, []);
 
+  const endStreamingWithCache = useCallback(() => {
+    synthesis.endStreaming();
+  }, [synthesis]);
+
   const value: SpeechSynthesisContextType = {
     ...synthesis,
     speakBase64WithCache,
     playFromCache,
     hasCache,
+    endStreamingWithCache,
   };
 
   return (

@@ -26,6 +26,7 @@
     "@ai-sdk/xai": "2.0.13",
     "@alicloud/avatar20220130": "2.5.2",
     "@alicloud/openapi-client": "^0.4.15",
+    "@alicloud/pop-core": "^1.8.0",
     "@alicloud/tea-util": "^1.4.11",
     "@auth/drizzle-adapter": "^1.11.1",
     "@codemirror/lang-javascript": "^6.2.2",

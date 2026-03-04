@@ -18,6 +18,8 @@ import { classifyMessages } from "@/lib/ai/agent/classify";
 import { createDefaultStream } from "@/lib/ai/agent/common";
 import { createMockInterviewStream } from "@/lib/ai/agent/mock-interview";
 import { createResumeOptStream } from "@/lib/ai/agent/resume-opt";
+import { streamTTSFromLLM as streamTTSFromAli } from "@/lib/ai/ali-tts";
+import { streamTTSFromLLM as streamTTSFromDoubao } from "@/lib/ai/doubao-tts";
 import type { ChatModel } from "@/lib/ai/models";
 import type { RequestHints } from "@/lib/ai/prompts";
 import { synthesizeSpeech } from "@/lib/ai/tts";
@@ -148,76 +150,113 @@ export function createChatStream({
         };
         pipeProcess();
 
-        // 实时边检边 TTS
-        // biome-ignore lint/performance/useTopLevelRegex: regex used inside stream callback
-        const SENTENCE_END = /[。！？!?.\n]/;
-        const MIN_CHUNK_SIZE = 200;
-        let accumulated = "";
-
-        for await (const delta of result.textStream) {
-          accumulated += delta;
-
-          let shouldTriggerTTS = false;
-          let chunkToPlay = "";
-
-          // 1. 找最后一个句子边界
-          let lastBoundary = -1;
-          for (let i = 0; i < accumulated.length; i++) {
-            if (SENTENCE_END.test(accumulated[i])) {
-              lastBoundary = i;
+        // 首包音频就绪后放行文本流的辅助函数
+        const releaseTextBuffer = () => {
+          if (!isFirstTtsReady) {
+            isFirstTtsReady = true;
+            for (const c of textBuffer) {
+              delayedController.enqueue(c);
             }
+            textBuffer = [];
           }
+        };
 
-          if (lastBoundary >= 0) {
-            // 有边界，不管多长都切掉
-            chunkToPlay = accumulated.slice(0, lastBoundary + 1).trim();
-            accumulated = accumulated.slice(lastBoundary + 1);
-            shouldTriggerTTS = true;
-          } else if (accumulated.length >= MIN_CHUNK_SIZE) {
-            // 2. 超长无边界，强制切断
-            chunkToPlay = accumulated.trim();
-            accumulated = "";
-            shouldTriggerTTS = true;
+        // 实时流式 TTS：依次尝试 豆包 → CosyVoice → 逐句 MiniMax
+        let usedStreamingTTS = false;
+        const degraded: string[] = [];
+
+        // ── 第1级：豆包双向流式 TTS ──
+        try {
+          for await (const audioChunk of streamTTSFromDoubao(
+            result.textStream
+          )) {
+            dataStream.write({ type: "data-ttsAudio", data: audioChunk });
+            releaseTextBuffer();
           }
+          usedStreamingTTS = true;
+          dataStream.write({
+            type: "data-ttsProvider",
+            data: { provider: "doubao-tts", degraded },
+          });
+        } catch (doubaoError) {
+          console.warn("[agent] Doubao TTS failed:", doubaoError);
+          degraded.push("doubao-tts");
+        }
 
-          if (shouldTriggerTTS && chunkToPlay) {
-            const ttsResult = await synthesizeSpeech(chunkToPlay);
-            if (ttsResult) {
-              // 推送第一段语音给前端
-              dataStream.write({
-                type: "data-ttsAudio",
-                data: ttsResult,
-              });
-
-              // 然后再放行文本流（解决不同步感）
-              if (!isFirstTtsReady) {
-                isFirstTtsReady = true;
-                for (const c of textBuffer) {
-                  delayedController.enqueue(c);
-                }
-                textBuffer = [];
-              }
+        // ── 第2级：阿里云 CosyVoice 流式 TTS ──
+        if (!usedStreamingTTS) {
+          try {
+            for await (const audioChunk of streamTTSFromAli(
+              result.textStream
+            )) {
+              dataStream.write({ type: "data-ttsAudio", data: audioChunk });
+              releaseTextBuffer();
             }
+            usedStreamingTTS = true;
+            dataStream.write({
+              type: "data-ttsProvider",
+              data: { provider: "ali-tts", degraded },
+            });
+          } catch (aliError) {
+            console.warn("[agent] CosyVoice TTS failed:", aliError);
+            degraded.push("ali-tts");
           }
         }
 
-        // LLM 输出结束，处理剩余文本
-        if (accumulated.trim()) {
-          const ttsResult = await synthesizeSpeech(accumulated.trim());
-          if (ttsResult) {
-            dataStream.write({
-              type: "data-ttsAudio",
-              data: ttsResult,
-            });
+        // ── 第3级：逐句调 MiniMax / 智谱（仅在所有流式 TTS 失败时）──
+        if (!usedStreamingTTS) {
+          // biome-ignore lint/performance/useTopLevelRegex: regex used inside stream callback
+          const SENTENCE_END = /[。！？!?.\n]/;
+          const MIN_CHUNK_SIZE = 200;
+          let accumulated = "";
 
-            if (!isFirstTtsReady) {
-              isFirstTtsReady = true;
-              for (const c of textBuffer) {
-                delayedController.enqueue(c);
+          for await (const delta of result.textStream) {
+            accumulated += delta;
+
+            let shouldTriggerTTS = false;
+            let chunkToPlay = "";
+
+            // 1. 找最后一个句子边界
+            let lastBoundary = -1;
+            for (let i = 0; i < accumulated.length; i++) {
+              if (SENTENCE_END.test(accumulated[i])) {
+                lastBoundary = i;
               }
-              textBuffer = [];
+            }
+
+            if (lastBoundary >= 0) {
+              chunkToPlay = accumulated.slice(0, lastBoundary + 1).trim();
+              accumulated = accumulated.slice(lastBoundary + 1);
+              shouldTriggerTTS = true;
+            } else if (accumulated.length >= MIN_CHUNK_SIZE) {
+              chunkToPlay = accumulated.trim();
+              accumulated = "";
+              shouldTriggerTTS = true;
+            }
+
+            if (shouldTriggerTTS && chunkToPlay) {
+              const ttsResult = await synthesizeSpeech(chunkToPlay);
+              if (ttsResult) {
+                dataStream.write({ type: "data-ttsAudio", data: ttsResult });
+                releaseTextBuffer();
+              }
             }
           }
+
+          // LLM 输出结束，处理剩余文本
+          if (accumulated.trim()) {
+            const ttsResult = await synthesizeSpeech(accumulated.trim());
+            if (ttsResult) {
+              dataStream.write({ type: "data-ttsAudio", data: ttsResult });
+              releaseTextBuffer();
+            }
+          }
+
+          // 上报降级 provider 信息
+          dataStream.write({
+            type: "data-ttsProvider",
+            data: { provider: "minimax", degraded },
+          });
         }
 
         // 兜底放行

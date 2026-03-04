@@ -136,6 +136,17 @@ export function useSpeechSynthesis() {
       audioRef.current.pause();
       audioRef.current = null;
     }
+    // 停止 MSE 播放
+    if (mseAudioRef.current) {
+      mseAudioRef.current.pause();
+      mseAudioRef.current.src = "";
+      mseAudioRef.current = null;
+    }
+    mediaSourceRef.current = null;
+    sourceBufferRef.current = null;
+    msePendingRef.current = [];
+    mseReadyRef.current = false;
+    mseEndedRef.current = false;
     isProcessingQueueRef.current = false;
     setIsSpeaking(false);
   }, []);
@@ -209,33 +220,166 @@ export function useSpeechSynthesis() {
     }
   }, []);
 
+  // ── MediaSource 流式播放（消除 chunk 切换卡带）──────────────
+  const mseAudioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaSourceRef = useRef<MediaSource | null>(null);
+  const sourceBufferRef = useRef<SourceBuffer | null>(null);
+  const msePendingRef = useRef<Uint8Array[]>([]);
+  const mseReadyRef = useRef(false);
+  const mseEndedRef = useRef(false);
+
+  /** 尝试将队列中等待的 buffer 追加到 SourceBuffer */
+  const flushMSEPending = useCallback(() => {
+    const sb = sourceBufferRef.current;
+    if (!sb || sb.updating || msePendingRef.current.length === 0) {
+      return;
+    }
+    const chunk = msePendingRef.current.shift();
+    if (chunk) {
+      try {
+        sb.appendBuffer(chunk.buffer as ArrayBuffer);
+      } catch {
+        // QuotaExceededError 等 — fallback：放回队列
+        msePendingRef.current.unshift(chunk);
+      }
+    }
+  }, []);
+
+  /** 初始化 MediaSource 播放器 */
+  const initMSE = useCallback(() => {
+    // 清理旧的
+    if (mseAudioRef.current) {
+      mseAudioRef.current.pause();
+      mseAudioRef.current.src = "";
+    }
+
+    const ms = new MediaSource();
+    const audio = new Audio();
+    audio.src = URL.createObjectURL(ms);
+
+    mseAudioRef.current = audio;
+    mediaSourceRef.current = ms;
+    mseReadyRef.current = false;
+    mseEndedRef.current = false;
+    msePendingRef.current = [];
+
+    ms.addEventListener("sourceopen", () => {
+      try {
+        const sb = ms.addSourceBuffer("audio/mpeg");
+        sourceBufferRef.current = sb;
+        mseReadyRef.current = true;
+
+        sb.addEventListener("updateend", () => {
+          // 继续 flush 排队的 buffer
+          if (msePendingRef.current.length > 0) {
+            flushMSEPending();
+          } else if (mseEndedRef.current && !sb.updating) {
+            // 所有数据已追加完毕
+            try {
+              if (ms.readyState === "open") {
+                ms.endOfStream();
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+        });
+
+        // flush 初始化前就到达的数据
+        flushMSEPending();
+      } catch {
+        // 浏览器不支持 audio/mpeg MSE — 标记为不可用
+        mseReadyRef.current = false;
+      }
+    });
+
+    audio.play().catch(() => {
+      // autoplay blocked — 后续用户交互后会触发
+    });
+  }, [flushMSEPending]);
+
+  /** 检测浏览器是否支持 MSE audio/mpeg */
+  const mseSupportedRef = useRef<boolean | null>(null);
+  if (mseSupportedRef.current === null && typeof window !== "undefined") {
+    mseSupportedRef.current =
+      typeof MediaSource !== "undefined" &&
+      MediaSource.isTypeSupported("audio/mpeg");
+  }
+
   // 直接播放 base64 音频（服务端推送模式，不走 HTTP）
   const speakBase64 = useCallback(
     (base64: string, mimeType = "audio/mpeg") => {
       stoppedRef.current = false;
       setIsSpeaking(true);
 
-      // base64 → Blob 是同步的，直接 resolve
-      const blobPromise = Promise.resolve(
-        (() => {
-          try {
-            const binary = atob(base64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-              bytes[i] = binary.charCodeAt(i);
-            }
-            return new Blob([bytes], { type: mimeType });
-          } catch {
-            return null;
-          }
-        })()
-      );
+      // base64 → Uint8Array
+      let bytes: Uint8Array;
+      try {
+        const binary = atob(base64);
+        bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+      } catch {
+        return;
+      }
 
+      // MSE 模式：追加到 SourceBuffer（无缝播放）
+      if (mseSupportedRef.current && mimeType === "audio/mpeg") {
+        if (
+          !mediaSourceRef.current ||
+          mediaSourceRef.current.readyState === "ended"
+        ) {
+          initMSE();
+        }
+
+        msePendingRef.current.push(bytes);
+
+        if (mseReadyRef.current) {
+          flushMSEPending();
+        }
+        return;
+      }
+
+      // Fallback: 旧的 Blob 队列模式
+      const blobPromise = Promise.resolve(
+        new Blob([bytes.buffer as ArrayBuffer], { type: mimeType })
+      );
       queueRef.current.push(blobPromise);
       processQueue();
     },
-    [processQueue]
+    [initMSE, flushMSEPending, processQueue]
   );
+
+  /** 标记流式 TTS 结束，让 MediaSource 正确结束 */
+  const endStreaming = useCallback(() => {
+    mseEndedRef.current = true;
+    const sb = sourceBufferRef.current;
+    const ms = mediaSourceRef.current;
+    if (
+      sb &&
+      !sb.updating &&
+      msePendingRef.current.length === 0 &&
+      ms?.readyState === "open"
+    ) {
+      try {
+        ms.endOfStream();
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // 监听播放结束
+    const audio = mseAudioRef.current;
+    if (audio) {
+      audio.onended = () => {
+        setIsSpeaking(false);
+        mseAudioRef.current = null;
+        mediaSourceRef.current = null;
+        sourceBufferRef.current = null;
+      };
+    }
+  }, []);
 
   // 组件卸载时清理
   useEffect(() => {
@@ -245,6 +389,11 @@ export function useSpeechSynthesis() {
         c.abort();
       }
       audioRef.current?.pause();
+      // 清理 MSE
+      if (mseAudioRef.current) {
+        mseAudioRef.current.pause();
+        mseAudioRef.current.src = "";
+      }
     };
   }, []);
 
@@ -252,6 +401,7 @@ export function useSpeechSynthesis() {
     speak,
     speakChunk,
     speakBase64,
+    endStreaming,
     flushChunks,
     stop,
     pause,

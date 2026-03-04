@@ -18,42 +18,72 @@ export function GET() {
 
   // === TTS 服务 ===
 
-  // MiniMax Speech-02 (优先)
+  // 豆包 TTS 2.0 (首选 — 流式)
+  services.push({
+    name: "TTS 2.0",
+    type: "tts",
+    provider: "豆包",
+    status:
+      process.env.DOUBAO_VOICE_APP_ID && process.env.DOUBAO_VOICE_ACCESS_TOKEN
+        ? "available"
+        : "unavailable",
+    priority: 1,
+  });
+
+  // 阿里云 CosyVoice (备选 — 流式)
+  services.push({
+    name: "CosyVoice",
+    type: "tts",
+    provider: "阿里云",
+    status: process.env.ALI_NLS_APPKEY ? "available" : "unavailable",
+    priority: 2,
+  });
+
+  // MiniMax Speech-02 (备选2)
   services.push({
     name: "Speech-02-Turbo",
     type: "tts",
     provider: "MiniMax",
     status: process.env.MINIMAX_API_KEY ? "available" : "unavailable",
-    priority: 1,
+    priority: 3,
   });
 
-  // 智谱 GLM-TTS (降级)
+  // 智谱 GLM-TTS (备选3)
   services.push({
     name: "GLM-TTS",
     type: "tts",
     provider: "智谱",
     status: process.env.ZHIPU_API_KEY ? "available" : "unavailable",
-    priority: 2,
+    priority: 4,
   });
 
   // === STT 服务 ===
 
-  // Groq Whisper (优先)
+  // 阿里云实时语音识别 (首选 — 流式)
+  services.push({
+    name: "实时语音识别",
+    type: "stt",
+    provider: "阿里云",
+    status: process.env.ALI_NLS_APPKEY ? "available" : "unavailable",
+    priority: 1,
+  });
+
+  // Groq Whisper (降级1)
   services.push({
     name: "Whisper-V3",
     type: "stt",
     provider: "Groq",
     status: process.env.GROQ_API_KEY ? "available" : "unavailable",
-    priority: 1,
+    priority: 2,
   });
 
-  // 智谱 GLM-ASR (降级)
+  // 智谱 GLM-ASR (降级2)
   services.push({
     name: "GLM-ASR",
     type: "stt",
     provider: "智谱",
     status: process.env.ZHIPU_API_KEY ? "available" : "unavailable",
-    priority: 2,
+    priority: 3,
   });
 
   return Response.json({ services });

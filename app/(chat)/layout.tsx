@@ -7,6 +7,7 @@ import { GuestExpiredToast } from "@/components/guest-expired-toast";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { VoiceHealthProvider } from "@/components/voice-health-context";
 import { VoiceModeProvider } from "@/components/voice-mode-context";
+import { VoiceProviderProvider } from "@/components/voice-provider-context";
 import { auth } from "../(auth)/auth";
 
 export const dynamic = "force-dynamic";
@@ -21,9 +22,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <DataStreamProvider>
         <VoiceModeProvider>
           <VoiceHealthProvider>
-            <Suspense fallback={<div className="flex h-dvh" />}>
-              <SidebarWrapper>{children}</SidebarWrapper>
-            </Suspense>
+            <VoiceProviderProvider>
+              <Suspense fallback={<div className="flex h-dvh" />}>
+                <SidebarWrapper>{children}</SidebarWrapper>
+              </Suspense>
+            </VoiceProviderProvider>
           </VoiceHealthProvider>
         </VoiceModeProvider>
       </DataStreamProvider>

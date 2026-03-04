@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 
 /** 单个服务的健康状态 */
 type ServiceHealth = {
@@ -34,6 +35,20 @@ type VoiceHealthContextType = {
 
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 分钟冷却
 
+/** provider key → 用户可读名 */
+const PROVIDER_DISPLAY: Record<string, string> = {
+  "ali-tts": "阿里云 TTS",
+  "doubao-tts": "豆包 TTS",
+  "ali-streaming": "阿里云 ASR",
+  minimax: "MiniMax",
+  zhipu: "智谱 TTS",
+  "zhipu-stt": "智谱 ASR",
+  groq: "Groq",
+};
+function displayProvider(key: string) {
+  return PROVIDER_DISPLAY[key] || key;
+}
+
 const VoiceHealthContext = createContext<VoiceHealthContextType>({
   services: [],
   reportFailure: () => {
@@ -50,32 +65,53 @@ const VoiceHealthContext = createContext<VoiceHealthContextType>({
 function createInitialServices(): ServiceHealth[] {
   return [
     {
+      name: "TTS 2.0",
+      type: "tts",
+      provider: "doubao-tts",
+      status: "available",
+      priority: 1,
+    },
+    {
+      name: "CosyVoice",
+      type: "tts",
+      provider: "ali-tts",
+      status: "available",
+      priority: 2,
+    },
+    {
       name: "Speech-02-Turbo",
       type: "tts",
       provider: "minimax",
       status: "available",
-      priority: 1,
+      priority: 3,
     },
     {
       name: "GLM-TTS",
       type: "tts",
       provider: "zhipu",
       status: "available",
-      priority: 2,
+      priority: 4,
+    },
+    {
+      name: "实时语音识别",
+      type: "stt",
+      provider: "ali-streaming",
+      status: "available",
+      priority: 1,
     },
     {
       name: "Whisper-V3",
       type: "stt",
       provider: "groq",
       status: "available",
-      priority: 1,
+      priority: 2,
     },
     {
       name: "GLM-ASR",
       type: "stt",
       provider: "zhipu-stt",
       status: "available",
-      priority: 2,
+      priority: 3,
     },
   ];
 }
@@ -145,6 +181,18 @@ export function VoiceHealthProvider({ children }: { children: ReactNode }) {
     cooldownTimers.current.set(providerKey, timer);
   }, []);
 
+  // 去重：同一 provider 5s 内不重复弹 toast
+  const lastToastTime = useRef<Map<string, number>>(new Map());
+  const shouldToast = useCallback((key: string) => {
+    const now = Date.now();
+    const last = lastToastTime.current.get(key) || 0;
+    if (now - last < 5000) {
+      return false;
+    }
+    lastToastTime.current.set(key, now);
+    return true;
+  }, []);
+
   const reportFailure = useCallback(
     (providerKey: string) => {
       markFailed(providerKey);
@@ -156,11 +204,9 @@ export function VoiceHealthProvider({ children }: { children: ReactNode }) {
     (provider: string, degradedList: string[]) => {
       setServices((prev) =>
         prev.map((s) => {
-          // 标记降级的服务为失败
           if (degradedList.includes(s.provider)) {
             return { ...s, status: "failed" as const, failedAt: Date.now() };
           }
-          // 用到的服务标记为正常
           if (s.provider === provider) {
             return { ...s, status: "available" as const, failedAt: undefined };
           }
@@ -172,8 +218,20 @@ export function VoiceHealthProvider({ children }: { children: ReactNode }) {
       for (const degradedProvider of degradedList) {
         markFailed(degradedProvider);
       }
+
+      // Toast：降级通知
+      if (degradedList.length > 0) {
+        const failedNames = degradedList.map(displayProvider).join("、");
+        const activeProviderName = displayProvider(provider);
+        const toastKey = `degraded-${degradedList.join(",")}`;
+        if (shouldToast(toastKey)) {
+          toast.warning(
+            `${failedNames} 不可用，已降级至 ${activeProviderName}`
+          );
+        }
+      }
     },
-    [markFailed]
+    [markFailed, shouldToast]
   );
 
   const isTtsDown = services
@@ -183,6 +241,20 @@ export function VoiceHealthProvider({ children }: { children: ReactNode }) {
   const isSttDown = services
     .filter((s) => s.type === "stt")
     .every((s) => s.status === "failed");
+
+  // Toast：全部服务不可用
+  const prevTtsDown = useRef(false);
+  const prevSttDown = useRef(false);
+  useEffect(() => {
+    if (isTtsDown && !prevTtsDown.current) {
+      toast.error("所有 TTS 服务不可用，语音播报已暂停");
+    }
+    if (isSttDown && !prevSttDown.current) {
+      toast.error("所有 STT 服务不可用，语音识别已暂停");
+    }
+    prevTtsDown.current = isTtsDown;
+    prevSttDown.current = isSttDown;
+  }, [isTtsDown, isSttDown]);
 
   // 清理计时器
   useEffect(() => {
