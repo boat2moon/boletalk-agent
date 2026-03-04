@@ -57,9 +57,7 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     const durationSeconds =
       messagesFromDb.length >= 2
         ? Math.round(
-            (new Date(
-              messagesFromDb[messagesFromDb.length - 1]!.createdAt
-            ).getTime() -
+            (new Date(messagesFromDb.at(-1)?.createdAt ?? 0).getTime() -
               new Date(messagesFromDb[0].createdAt).getTime()) /
               1000
           )

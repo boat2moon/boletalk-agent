@@ -20,7 +20,9 @@ async function getToken(): Promise<string> {
   const accessKeySecret = process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET;
 
   if (!accessKeyId || !accessKeySecret) {
-    throw new Error("Missing ALIBABA_CLOUD_ACCESS_KEY_ID or ALIBABA_CLOUD_ACCESS_KEY_SECRET");
+    throw new Error(
+      "Missing ALIBABA_CLOUD_ACCESS_KEY_ID or ALIBABA_CLOUD_ACCESS_KEY_SECRET"
+    );
   }
 
   const client = new RPCClient({
@@ -48,15 +50,15 @@ export async function POST() {
     const appkey = process.env.ALI_NLS_APPKEY;
 
     if (!appkey) {
-      return Response.json({ error: "Missing ALI_NLS_APPKEY" }, { status: 500 });
+      return Response.json(
+        { error: "Missing ALI_NLS_APPKEY" },
+        { status: 500 }
+      );
     }
 
     return Response.json({ token, appkey });
   } catch (error) {
     console.error("[ali-asr] Failed to get token:", error);
-    return Response.json(
-      { error: "Failed to get NLS token" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Failed to get NLS token" }, { status: 500 });
   }
 }
