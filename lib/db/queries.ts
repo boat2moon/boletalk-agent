@@ -26,6 +26,8 @@ import {
   chatApiCall,
   type DBMessage,
   document,
+  type Evaluation,
+  evaluation,
   message,
   type Suggestion,
   stream,
@@ -721,6 +723,70 @@ export async function getFirstChatId(): Promise<string | null> {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get first chat id"
+    );
+  }
+}
+
+// ==================== 面试评估 ====================
+
+/**
+ * 保存面试评估结果（幂等 upsert）
+ *
+ * 每个会话只能有一条评估。若已存在，则更新评分+评语。
+ */
+export async function saveEvaluation({
+  chatId,
+  userId,
+  scores,
+  comments,
+}: {
+  chatId: string;
+  userId: string;
+  scores: Record<string, number>;
+  comments: Record<string, unknown>;
+}) {
+  try {
+    return await db
+      .insert(evaluation)
+      .values({
+        chatId,
+        userId,
+        scores,
+        comments,
+        createdAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: evaluation.chatId,
+        set: {
+          scores,
+          comments,
+          createdAt: new Date(),
+        },
+      })
+      .returning();
+  } catch (_error) {
+    throw new ChatSDKError("bad_request:database", "Failed to save evaluation");
+  }
+}
+
+/**
+ * 根据 chatId 获取面试评估结果
+ */
+export async function getEvaluationByChatId({
+  chatId,
+}: {
+  chatId: string;
+}): Promise<Evaluation | null> {
+  try {
+    const [result] = await db
+      .select()
+      .from(evaluation)
+      .where(eq(evaluation.chatId, chatId));
+    return result ?? null;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get evaluation by chat id"
     );
   }
 }

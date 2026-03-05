@@ -4,6 +4,7 @@ import type { UseChatHelpers } from "@ai-sdk/react";
 import { Trigger } from "@radix-ui/react-select";
 import type { UIMessage } from "ai";
 import equal from "fast-deep-equal";
+import { ClipboardCheck } from "lucide-react";
 import {
   type ChangeEvent,
   type Dispatch,
@@ -41,14 +42,19 @@ import {
   PaperclipIcon,
   StopIcon,
 } from "./icons";
+import { JobTemplateSelector } from "./job-template-selector";
 import { PreviewAttachment } from "./preview-attachment";
 import { SuggestedActions } from "./suggested-actions";
 import { Button } from "./ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import type { VisibilityType } from "./visibility-selector";
 import { useVoiceHealth } from "./voice-health-context";
 import { useVoiceMode } from "./voice-mode-context";
 import { useVoiceProvider } from "./voice-provider-context";
 import { VoiceServiceStatus } from "./voice-service-status";
+
+/** 最小对话轮次（低于此值禁用总结评价按钮） */
+const MIN_EVAL_TURNS = 10;
 
 // 将文件读取为 base64 字符串的工具函数
 // 使用 FileReader API 将文件转换为 Data URL，然后提取 base64 部分
@@ -85,6 +91,11 @@ function PureMultimodalInput({
   selectedModelId,
   onModelChange,
   onStreamingTextChange,
+  evaluationDisabled,
+  onEvaluate,
+  selectedJobTemplate,
+  customJD,
+  onJobTemplateChange,
 }: {
   chatId: string;
   input: string;
@@ -101,6 +112,16 @@ function PureMultimodalInput({
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
   onStreamingTextChange?: (text: string) => void;
+  /** 评估面板展示时禁用输入 */
+  evaluationDisabled?: boolean;
+  /** 触发面试评估 */
+  onEvaluate?: () => void;
+  /** 当前选中的 JD 模板 ID */
+  selectedJobTemplate?: string;
+  /** 自定义 JD 文本 */
+  customJD?: string;
+  /** JD 模板变更回调 */
+  onJobTemplateChange?: (templateId?: string, customJD?: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
@@ -586,10 +607,46 @@ function PureMultimodalInput({
                 selectedModelId={selectedModelId}
                 status={status}
               />
+              {onJobTemplateChange && (
+                <JobTemplateSelector
+                  customJD={customJD}
+                  onTemplateChange={onJobTemplateChange}
+                  selectedTemplate={selectedJobTemplate}
+                  variant="compact"
+                />
+              )}
               <ModelSelectorCompact
                 onModelChange={onModelChange}
                 selectedModelId={selectedModelId}
               />
+              {/* 总结评价按钮（语音模式） */}
+              {onEvaluate && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        className="h-7 gap-1 px-2 text-xs"
+                        disabled={
+                          evaluationDisabled ||
+                          status === "streaming" ||
+                          messages.length < MIN_EVAL_TURNS
+                        }
+                        onClick={onEvaluate}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <ClipboardCheck className="size-3.5" />
+                        总结评价
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {messages.length < MIN_EVAL_TURNS && (
+                    <TooltipContent>
+                      至少需要 {MIN_EVAL_TURNS} 轮对话才能生成评估
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <VoiceServiceStatus />
@@ -649,6 +706,7 @@ function PureMultimodalInput({
               className="grow resize-none border-0! border-none! bg-transparent p-2 text-sm outline-none ring-0 [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden"
               data-testid="multimodal-input"
               disableAutoResize={true}
+              disabled={evaluationDisabled}
               maxHeight={200}
               minHeight={44}
               onChange={handleInput}
@@ -667,10 +725,46 @@ function PureMultimodalInput({
                 selectedModelId={selectedModelId}
                 status={status}
               />
+              {onJobTemplateChange && (
+                <JobTemplateSelector
+                  customJD={customJD}
+                  onTemplateChange={onJobTemplateChange}
+                  selectedTemplate={selectedJobTemplate}
+                  variant="compact"
+                />
+              )}
               <ModelSelectorCompact
                 onModelChange={onModelChange}
                 selectedModelId={selectedModelId}
               />
+              {/* 总结评价按钮（文本模式） */}
+              {onEvaluate && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        className="h-7 gap-1 rounded-md! px-2 text-xs"
+                        disabled={
+                          evaluationDisabled ||
+                          status === "streaming" ||
+                          messages.length < MIN_EVAL_TURNS
+                        }
+                        onClick={onEvaluate}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <ClipboardCheck className="size-3.5" />
+                        总结评价
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {messages.length < MIN_EVAL_TURNS && (
+                    <TooltipContent>
+                      至少需要 {MIN_EVAL_TURNS} 轮对话才能生成评估
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              )}
             </PromptInputTools>
 
             {status === "submitted" ? (
@@ -708,6 +802,9 @@ export const MultimodalInput = memo(
       return false;
     }
     if (prevProps.selectedModelId !== nextProps.selectedModelId) {
+      return false;
+    }
+    if (prevProps.evaluationDisabled !== nextProps.evaluationDisabled) {
       return false;
     }
 
@@ -777,7 +874,7 @@ function PureModelSelectorCompact({
       value={selectedModel?.name}
     >
       <Trigger asChild>
-        <Button className="h-8 px-2" variant="ghost">
+        <Button className="h-7 gap-1 px-2 text-xs" size="sm" variant="outline">
           <CpuIcon size={16} />
           <span className="hidden font-medium text-xs sm:block">
             {selectedModel?.name}

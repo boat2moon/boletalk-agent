@@ -37,6 +37,8 @@ export type CreateDefaultStreamOptions = {
   requestHints: RequestHints;
   session: Session;
   voiceMode?: boolean;
+  /** 职位 JD 上下文（可选） */
+  jobContext?: string;
   dataStream: UIMessageStreamWriter<ChatMessage>;
   /** 可选回调，usage 计算完成时通知外层 */
   onUsageUpdate?: (usage: AppUsage) => void;
@@ -57,12 +59,18 @@ export function createDefaultStream({
   // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for future use when tools are re-enabled
   session,
   voiceMode,
+  jobContext,
   dataStream,
   onUsageUpdate,
 }: CreateDefaultStreamOptions) {
   return streamText({
     model: myProvider.languageModel(selectedChatModel),
-    system: systemPrompt({ selectedChatModel, requestHints, voiceMode }),
+    system: systemPrompt({
+      selectedChatModel,
+      requestHints,
+      voiceMode,
+      jobContext,
+    }),
     messages: convertToModelMessages(messages),
     stopWhen: stepCountIs(5),
     experimental_activeTools:

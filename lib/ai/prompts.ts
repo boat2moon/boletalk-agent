@@ -64,30 +64,37 @@ About the origin of user's request:
 export const systemPrompt = ({
   selectedChatModel,
   voiceMode,
+  jobContext,
   // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for future use
   requestHints,
 }: {
   selectedChatModel: string;
   requestHints: RequestHints;
   voiceMode?: boolean;
+  jobContext?: string;
 }) => {
   // requestHints 包含用户地理位置信息，当前项目不需要使用
   // const requestPrompt = getRequestPromptFromHints(requestHints);
 
-  const basePrompt =
+  let prompt =
     selectedChatModel === "chat-model-reasoning"
       ? regularPrompt
       : `${regularPrompt}\n\n${artifactsPrompt}`;
 
+  // 注入职位 JD 上下文（如果用户选择了模板）
+  if (jobContext) {
+    prompt += `\n\n${jobContext}`;
+  }
+
   if (voiceMode) {
-    return `${basePrompt}\n\n[语音模式特殊要求]：
+    return `${prompt}\n\n[语音模式特殊要求]：
 用户正在通过语音与你交流。你的回答必须口语化、简洁自然，就像面对面聊天一样。
 - 绝对避免生成 Markdown 格式（如标题、列表符号、表格、代码块、加粗等），只用纯文本
 - 如果你调用了工具（如知识库检索），工具返回的内容仅作为你的内部参考上下文，不要直接输出或复述工具返回的原始内容，而是用自己的话、口语化地总结要点来回答用户
 - 直接给结论，不要超过 3-5 句`;
   }
 
-  return `${basePrompt}\n\n`;
+  return `${prompt}\n\n`;
 };
 
 export const codePrompt = `

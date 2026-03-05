@@ -1,3 +1,4 @@
+import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createOpenAI } from "@ai-sdk/openai";
 import { customProvider } from "ai";
 import { zhipu } from "zhipu-ai-provider";
@@ -28,6 +29,10 @@ const dashscope = createOpenAI({
   },
 });
 
+const deepseek = createDeepSeek({
+  apiKey: process.env.DEEPSEEK_API_KEY,
+});
+
 export const myProvider = isTestEnvironment
   ? (() => {
       const { artifactModel, chatModel, titleModel } = require("./models.mock");
@@ -43,6 +48,7 @@ export const myProvider = isTestEnvironment
       languageModels: {
         "chat-model": dashscope.chat("qwen3.5-flash"),
         "chat-model-glm": zhipu("glm-4-air"),
+        "eval-model": deepseek("deepseek-chat"),
         "title-model": dashscope.chat("qwen3.5-flash"),
         "artifact-model": dashscope.chat("qwen3.5-flash"),
       },

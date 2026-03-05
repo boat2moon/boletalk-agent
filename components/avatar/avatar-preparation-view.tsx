@@ -11,6 +11,7 @@
 import { FileText, Loader2, Upload, Video, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+import { JobTemplateSelector } from "@/components/job-template-selector";
 import { Button } from "@/components/ui/button";
 
 /** 将 PDF 文件读取为 base64 字符串 */
@@ -33,10 +34,14 @@ const readFileAsBase64 = (file: File): Promise<string> =>
 export function AvatarPreparationView({
   onStart,
   bootStatus,
+  selectedJobTemplate,
+  onJobTemplateChange,
 }: {
   onStart: (resumeText?: string) => Promise<void>;
   /** 从 AvatarPage 传入的启动进度文案 */
   bootStatus?: string;
+  selectedJobTemplate?: string;
+  onJobTemplateChange?: (templateId?: string) => void;
 }) {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeText, setResumeText] = useState<string>("");
@@ -156,6 +161,15 @@ export function AvatarPreparationView({
             </button>
           )}
         </div>
+
+        {/* 岗位 JD 选择 */}
+        {onJobTemplateChange && (
+          <JobTemplateSelector
+            onTemplateChange={onJobTemplateChange}
+            selectedTemplate={selectedJobTemplate}
+            variant="full"
+          />
+        )}
 
         {/* 开始面试按钮 */}
         <Button

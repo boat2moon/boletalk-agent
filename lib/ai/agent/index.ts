@@ -16,6 +16,10 @@ import { createUIMessageStream } from "ai";
 import type { Session } from "next-auth";
 import { classifyMessages } from "@/lib/ai/agent/classify";
 import { createDefaultStream } from "@/lib/ai/agent/common";
+import {
+  type EvaluationResult,
+  generateEvaluation,
+} from "@/lib/ai/agent/evaluate";
 import { createMockInterviewStream } from "@/lib/ai/agent/mock-interview";
 import { createResumeOptStream } from "@/lib/ai/agent/resume-opt";
 import { streamTTSFromLLM as streamTTSFromAli } from "@/lib/ai/ali-tts";
@@ -36,8 +40,14 @@ export type CreateChatStreamOptions = {
   voiceMode?: boolean;
   /** 新建会话时 AI 生成的标题，会在流开始时推送给前端 */
   chatTitle?: string;
+  /** 显式意图标识（由前端按钮传入，如 'evaluate'） */
+  intent?: string;
+  /** 职位 JD 上下文（可选，由 buildJobContext 生成） */
+  jobContext?: string;
   /** 外层回调：stream 完成后保存消息和 usage */
   onFinish?: (params: { messages: ChatMessage[]; usage?: AppUsage }) => void;
+  /** 评估完成回调：将结果写入 DB */
+  onEvaluationComplete?: (result: EvaluationResult) => Promise<void>;
 };
 
 export function createChatStream({
@@ -47,7 +57,10 @@ export function createChatStream({
   session,
   voiceMode,
   chatTitle,
+  intent,
+  jobContext,
   onFinish,
+  onEvaluationComplete,
 }: CreateChatStreamOptions) {
   let finalMergedUsage: AppUsage | undefined;
 
@@ -65,12 +78,40 @@ export function createChatStream({
       }
 
       console.log(`[⏱ TIMING] classify start +${Date.now() - t0}ms`);
-      const classification = await classifyMessages(messages);
+      const classification = await classifyMessages(messages, intent);
       console.log(
         `[⏱ TIMING] classify done  +${Date.now() - t0}ms`,
         classification
       );
 
+      // ── 评估分支：generateObject 生成结构化结果，不走 TTS ──
+      if (classification.evaluate) {
+        console.log(`[⏱ TIMING] evaluate start +${Date.now() - t0}ms`);
+        try {
+          const evaluationResult = await generateEvaluation(messages);
+          console.log(`[⏱ TIMING] evaluate done  +${Date.now() - t0}ms`);
+
+          // 将评估结果推送给前端
+          dataStream.write({
+            type: "data-evaluation",
+            data: evaluationResult,
+          });
+
+          // 回调外层写入 DB
+          if (onEvaluationComplete) {
+            await onEvaluationComplete(evaluationResult);
+          }
+        } catch (error) {
+          console.error("[agent] Evaluation failed:", error);
+          dataStream.write({
+            type: "data-evaluationError",
+            data: "评估生成失败，请稍后重试。",
+          });
+        }
+        return; // 评估分支不走后续的 streamText + TTS 流程
+      }
+
+      // ── 正常对话分支：streamText ──
       let result:
         | ReturnType<typeof createResumeOptStream>
         | ReturnType<typeof createMockInterviewStream>
@@ -89,6 +130,7 @@ export function createChatStream({
         result = createMockInterviewStream({
           messages,
           voiceMode,
+          jobContext,
           dataStream,
           onUsageUpdate: (usage) => {
             finalMergedUsage = usage;
@@ -101,6 +143,7 @@ export function createChatStream({
           requestHints,
           session,
           voiceMode,
+          jobContext,
           dataStream,
           onUsageUpdate: (usage) => {
             finalMergedUsage = usage;

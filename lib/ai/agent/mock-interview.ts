@@ -27,6 +27,8 @@ import type { AppUsage } from "@/lib/usage";
 export type CreateMockInterviewStreamOptions = {
   messages: ChatMessage[];
   voiceMode?: boolean;
+  /** 职位 JD 上下文（可选） */
+  jobContext?: string;
   /** 数据流写入器，用于推送 usage 和 tool 结果 */
   dataStream: UIMessageStreamWriter<ChatMessage>;
   /** 可选回调，usage 计算完成时通知外层 */
@@ -47,6 +49,7 @@ export type CreateMockInterviewStreamOptions = {
 export function createMockInterviewStream({
   messages,
   voiceMode,
+  jobContext,
   dataStream,
   onUsageUpdate,
 }: CreateMockInterviewStreamOptions) {
@@ -82,6 +85,10 @@ export function createMockInterviewStream({
 - 项目介绍时，最重要的是能让人听懂看懂这是个什么项目、什么功能，不要一开始就深入细节，这样会很乱
 - 项目挑战和难点，可使用 STAR 模板来讲，这样才够清晰明了
 - 项目性能优化，最好能有具体的例子和量化指标`;
+
+  if (jobContext) {
+    systemPrompt += `\n\n${jobContext}`;
+  }
 
   if (voiceMode) {
     systemPrompt += `\n\n${buildVoiceConstraint()}`;

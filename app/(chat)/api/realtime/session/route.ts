@@ -14,6 +14,7 @@
 import { z } from "zod";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { buildJobContext } from "@/lib/ai/job-templates";
 import { realtimeModels } from "@/lib/ai/realtime-models";
 import { buildInterviewPrompt } from "@/lib/ai/toolkit/prompt-builder";
 import {
@@ -37,6 +38,8 @@ const requestSchema = z.object({
   resumeText: z.string().optional(),
   /** 语音选择（可选） */
   voice: z.string().optional(),
+  /** 选中的职位 JD 模板（可选） */
+  selectedJobTemplate: z.string().optional(),
 });
 
 /** bole-server 的 WebSocket 代理地址（占位，部署后替换） */
@@ -48,7 +51,8 @@ const SESSION_SECRET =
   process.env.REALTIME_SESSION_SECRET || "dev-secret-change-me";
 
 /** 构建默认面试 prompt（不上传简历时使用） */
-const getDefaultInterviewPrompt = () => buildInterviewPrompt({ mode: "phone" });
+const getDefaultInterviewPrompt = (jobContext?: string) =>
+  buildInterviewPrompt({ mode: "phone", jobContext });
 
 export async function POST(request: Request) {
   try {
@@ -96,7 +100,8 @@ export async function POST(request: Request) {
 
     // 4. 分析简历（如果提供了）
     let resumeAnalysis: ResumeAnalysis | null = null;
-    let interviewPrompt = getDefaultInterviewPrompt();
+    const jobContext = buildJobContext(body.selectedJobTemplate);
+    let interviewPrompt = getDefaultInterviewPrompt(jobContext);
 
     if (body.resumeText && body.resumeText.trim().length > 50) {
       try {
@@ -106,6 +111,7 @@ export async function POST(request: Request) {
         interviewPrompt = buildInterviewPrompt({
           mode: "phone",
           resumeContext,
+          jobContext,
         });
       } catch (err) {
         console.warn("简历分析失败，使用默认面试 prompt:", err);

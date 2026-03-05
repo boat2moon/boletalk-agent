@@ -5,11 +5,20 @@
  *
  * 用于 /chat/[id] 页面在 chatType 为 realtime 或 avatar 时展示只读的面试总结。
  * 复用了 InterviewSummary 的 UI 布局风格。
+ *
+ * 评估数据从数据库加载（GET /api/chat/evaluation），电话/视频面试不可继续对话，
+ * 所以永远不需要重新生成，只从 DB 读取。
  */
 
 import { Clock, MessageSquare, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { ChatHeader } from "@/components/chat-header";
+import {
+  EvaluationCard,
+  type EvaluationData,
+  EvaluationLoading,
+} from "@/components/evaluation-card";
 import { Button } from "@/components/ui/button";
 import type { ChatMessage } from "@/lib/types";
 
@@ -31,6 +40,26 @@ export function InterviewHistoryView({
   const durationSecs = durationSeconds % 60;
 
   const modeLabel = chatType === "realtime" ? "电话面试" : "视频面试";
+
+  // 从 DB 加载已有评估（只读，不重新生成）
+  const { data: evaluationData, isLoading: evaluationLoading } =
+    useSWR<EvaluationData | null>(
+      `/api/chat/evaluation?chatId=${chatId}`,
+      async (url: string) => {
+        try {
+          const res = await fetch(url);
+          if (res.status === 404) {
+            return null;
+          }
+          if (!res.ok) {
+            return null;
+          }
+          return (await res.json()) as EvaluationData;
+        } catch {
+          return null;
+        }
+      }
+    );
 
   return (
     <div className="flex h-dvh flex-col bg-background">
@@ -63,6 +92,18 @@ export function InterviewHistoryView({
                 <p className="font-semibold">{messages.length} 条</p>
               </div>
             </div>
+          </div>
+
+          {/* AI 面试评估（从 DB 加载） */}
+          <div className="rounded-xl border p-4">
+            <h3 className="mb-3 font-semibold text-sm">📊 面试评估</h3>
+            {evaluationLoading ? (
+              <EvaluationLoading />
+            ) : evaluationData ? (
+              <EvaluationCard compact data={evaluationData} />
+            ) : (
+              <p className="text-muted-foreground text-sm">暂无评估数据</p>
+            )}
           </div>
 
           {/* 对话记录 */}

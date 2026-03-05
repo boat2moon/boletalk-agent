@@ -70,6 +70,8 @@ export type BuildInterviewPromptOptions = {
   mode: InterviewMode;
   /** 可选的简历分析上下文（由 resume-analyzer 生成） */
   resumeContext?: string;
+  /** 可选的职位 JD 上下文（由 buildJobContext 生成） */
+  jobContext?: string;
 };
 
 /**
@@ -85,6 +87,7 @@ export type BuildInterviewPromptOptions = {
 export function buildInterviewPrompt({
   mode,
   resumeContext,
+  jobContext,
 }: BuildInterviewPromptOptions): string {
   const sceneDescription =
     mode === "avatar"
@@ -97,6 +100,10 @@ export function buildInterviewPrompt({
       : SPEECH_OUTPUT_CONSTRAINTS;
 
   let prompt = `${BASE_INTERVIEWER_ROLE}\n\n${sceneDescription}\n\n${constraints}\n\n${INTERVIEW_FLOW}`;
+
+  if (jobContext) {
+    prompt += `\n\n${jobContext}`;
+  }
 
   if (resumeContext) {
     prompt += `\n\n${resumeContext}`;

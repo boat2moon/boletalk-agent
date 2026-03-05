@@ -18,6 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useSidebar } from "@/components/ui/sidebar";
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
@@ -28,6 +29,8 @@ import type { AppUsage } from "@/lib/usage";
 import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
 import { useDataStream } from "./data-stream-provider";
+import type { EvaluationData } from "./evaluation-card";
+import { EvaluationPanel } from "./evaluation-panel";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
 import {
@@ -50,6 +53,7 @@ export function Chat({
   initialLastContext,
   hideHeader,
   onHasActiveChatChange,
+  onEvaluationLockChange,
   initialChatType,
 }: {
   id: string;
@@ -63,6 +67,8 @@ export function Chat({
   hideHeader?: boolean;
   /** 通知父组件“是否有活跃会话”状态变化 */
   onHasActiveChatChange?: (hasActive: boolean) => void;
+  /** 通知父组件评估面板是否锁定（用于隐藏顶部栏按钮） */
+  onEvaluationLockChange?: (locked: boolean) => void;
   /** 已有会话的类型，用于 mount 时同步 voiceMode */
   initialChatType?: string;
 }) {
@@ -138,9 +144,22 @@ export function Chat({
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
   const currentModelIdRef = useRef(currentModelId);
 
+  // 职位 JD 模板选择
+  const [selectedJobTemplate, setSelectedJobTemplate] = useState<
+    string | undefined
+  >();
+  const [customJD, setCustomJD] = useState<string | undefined>();
+  const jobTemplateRef = useRef(selectedJobTemplate);
+  const customJDRef = useRef(customJD);
+
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
   }, [currentModelId]);
+
+  useEffect(() => {
+    jobTemplateRef.current = selectedJobTemplate;
+    customJDRef.current = customJD;
+  }, [selectedJobTemplate, customJD]);
 
   const messagesRef = useRef<ChatMessage[]>(initialMessages);
   // 标记是否已将新建会话乐观插入侧边栏
@@ -207,6 +226,10 @@ export function Chat({
             selectedChatModel: currentModelIdRef.current,
             selectedVisibilityType: visibilityType,
             voiceMode: voiceModeRef.current === "voice",
+            selectedJobTemplate:
+              jobTemplateRef.current === "custom"
+                ? `custom:${customJDRef.current || ""}`
+                : jobTemplateRef.current,
             ...request.body,
           },
         };
@@ -280,6 +303,7 @@ export function Chat({
       if (dataPart.type === "data-usage") {
         setUsage(dataPart.data);
       }
+      // 注意：面试评估已改为直接调用 POST /api/chat/evaluation，不再经过 SSE
       // 接收服务端推送的 TTS 音频（同时缓存）
       if (
         dataPart.type === "data-ttsAudio" &&
@@ -394,6 +418,12 @@ export function Chat({
       firstDataRef.current = false;
       console.log("[⏱ FE-TIMING] sendMessage called");
       insertSkeletonToSidebar();
+
+      // 新消息发出 → 对话内容变化 → 标记评估过期 + 清空缓存
+      evalStaleRef.current = true;
+      setEvaluationData(null);
+      setEvaluationError(null);
+
       return sendMessage(...args);
     },
     [sendMessage, insertSkeletonToSidebar]
@@ -448,6 +478,106 @@ export function Chat({
   const [streamingText, setStreamingText] = useState("");
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
 
+  // ── 面试评估状态 ──
+  const [evaluationData, setEvaluationData] = useState<EvaluationData | null>(
+    null
+  );
+  const [showEvalPanel, setShowEvalPanel] = useState(false);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
+  // 评估加载中（发送了 evaluate intent 但还没收到结果）
+  const [_evaluationLoading, setEvaluationLoading] = useState(false);
+  // 标记评估是否已过期（用户发了新消息后置 true，防止 useSWR 用旧数据覆盖）
+  const evalStaleRef = useRef(false);
+
+  // 会话加载时 fetch 已有评估
+  const { data: existingEvaluation } = useSWR<EvaluationData | null>(
+    initialMessages.length >= 10 ? `/api/chat/evaluation?chatId=${id}` : null,
+    async (url: string) => {
+      try {
+        const res = await fetch(url);
+        if (res.status === 404) {
+          return null;
+        }
+        if (!res.ok) {
+          return null;
+        }
+        const data = await res.json();
+        return data as EvaluationData;
+      } catch {
+        return null;
+      }
+    }
+  );
+
+  // 已有评估时自动加载（仅在未过期时）
+  useEffect(() => {
+    if (existingEvaluation && !evalStaleRef.current) {
+      setEvaluationData(existingEvaluation);
+    }
+  }, [existingEvaluation]);
+
+  /**
+   * 发起评估请求
+   *
+   * 直接调用 POST /api/chat/evaluation 生成评估，不发送消息到聊天记录。
+   * 评估数据存储在独立的 Evaluation 表中。
+   */
+  const { setOpen: setSidebarOpen } = useSidebar();
+
+  // 使用 ref 避免 memo 闭包导致回调过期
+  const evalLockRef = useRef(onEvaluationLockChange);
+  evalLockRef.current = onEvaluationLockChange;
+  const evaluationDataRef = useRef(evaluationData);
+  evaluationDataRef.current = evaluationData;
+
+  const handleEvaluate = useCallback(async () => {
+    // 掐断当前 AI 输出 + TTS
+    stop();
+    stopSpeech();
+
+    // 收起左侧栏 + 通知父组件锁定
+    setSidebarOpen(false);
+    evalLockRef.current?.(true);
+
+    // 如果前端已有评估数据，直接展示（无需再请求）
+    if (evaluationDataRef.current) {
+      setShowEvalPanel(true);
+      return;
+    }
+
+    setEvaluationLoading(true);
+    setEvaluationError(null);
+    setEvaluationData(null);
+    setShowEvalPanel(true);
+
+    try {
+      // 调用 POST 接口生成评估（后端直接生成，缓存判断交给前端）
+      const res = await fetch("/api/chat/evaluation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId: id }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEvaluationData(data);
+        evalStaleRef.current = false; // 新评估已生成，重置过期标记
+      } else {
+        const errData = await res.json().catch(() => null);
+        setEvaluationError(errData?.error || "评估生成失败");
+      }
+    } catch {
+      setEvaluationError("网络错误，评估加载失败");
+    } finally {
+      setEvaluationLoading(false);
+    }
+  }, [stop, stopSpeech, setSidebarOpen, id]);
+
+  const handleCloseEvalPanel = useCallback(() => {
+    setShowEvalPanel(false);
+    evalLockRef.current?.(false);
+  }, []);
+
   useAutoResume({
     autoResume,
     initialMessages,
@@ -457,62 +587,91 @@ export function Chat({
 
   return (
     <>
-      <div className="overscroll-behavior-contain flex min-w-0 flex-1 touch-pan-y flex-col bg-background">
-        {!hideHeader && (
-          <ChatHeader
-            chatId={id}
-            hasActiveChat={messages.length > 0}
-            isReadonly={isReadonly}
-            selectedVisibilityType={initialVisibilityType}
-          />
-        )}
-
-        <Messages
-          chatId={id}
-          isArtifactVisible={isArtifactVisible}
-          isReadonly={isReadonly}
-          messages={
-            streamingText
-              ? [
-                  ...messages,
-                  {
-                    id: "streaming-preview",
-                    role: "user",
-                    content: streamingText,
-                    parts: [{ type: "text", text: streamingText }],
-                  } as ChatMessage,
-                ]
-              : messages
-          }
-          regenerate={regenerate}
-          selectedModelId={initialChatModel}
-          setMessages={setMessages}
-          status={isTextDone ? "ready" : status}
-          votes={votes}
-        />
-
-        <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
-          {!isReadonly && (
-            <MultimodalInput
-              attachments={attachments}
+      {/* 主内容行：聊天区 + 评估面板 */}
+      <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
+        {/* 聊天区域 */}
+        <div className="overscroll-behavior-contain relative flex min-w-0 flex-1 touch-pan-y flex-col bg-background">
+          {!hideHeader && (
+            <ChatHeader
               chatId={id}
-              input={input}
-              messages={messages}
-              onModelChange={setCurrentModelId}
-              onStreamingTextChange={setStreamingText}
-              selectedModelId={currentModelId}
-              selectedVisibilityType={visibilityType}
-              sendMessage={wrappedSendMessage}
-              setAttachments={setAttachments}
-              setInput={setInput}
-              setMessages={setMessages}
-              status={isTextDone ? "ready" : status}
-              stop={stop}
+              hasActiveChat={messages.length > 0}
+              isReadonly={isReadonly}
+              selectedVisibilityType={initialVisibilityType}
             />
           )}
+
+          <Messages
+            chatId={id}
+            isArtifactVisible={isArtifactVisible}
+            isReadonly={isReadonly}
+            messages={
+              streamingText
+                ? [
+                    ...messages,
+                    {
+                      id: "streaming-preview",
+                      role: "user",
+                      content: streamingText,
+                      parts: [{ type: "text", text: streamingText }],
+                    } as ChatMessage,
+                  ]
+                : messages
+            }
+            regenerate={regenerate}
+            selectedModelId={initialChatModel}
+            setMessages={setMessages}
+            status={isTextDone ? "ready" : status}
+            votes={votes}
+          />
+
+          <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+            {!isReadonly && (
+              <MultimodalInput
+                attachments={attachments}
+                chatId={id}
+                customJD={customJD}
+                evaluationDisabled={showEvalPanel}
+                input={input}
+                messages={messages}
+                onEvaluate={handleEvaluate}
+                onJobTemplateChange={(
+                  templateId: string | undefined,
+                  jd?: string
+                ) => {
+                  setSelectedJobTemplate(templateId);
+                  setCustomJD(jd);
+                }}
+                onModelChange={setCurrentModelId}
+                onStreamingTextChange={setStreamingText}
+                selectedJobTemplate={selectedJobTemplate}
+                selectedModelId={currentModelId}
+                selectedVisibilityType={visibilityType}
+                sendMessage={wrappedSendMessage}
+                setAttachments={setAttachments}
+                setInput={setInput}
+                setMessages={setMessages}
+                status={isTextDone ? "ready" : status}
+                stop={stop}
+              />
+            )}
+          </div>
+
+          {/* 评估面板展开时：仅覆盖输入区的交互遮罩 */}
+          {showEvalPanel && (
+            <div className="absolute right-0 bottom-0 left-0 z-10 h-[100px] cursor-not-allowed" />
+          )}
         </div>
+
+        {/* 右侧评估面板（布局级，占据空间推动聊天区左移） */}
+        <EvaluationPanel
+          data={evaluationData}
+          error={evaluationError}
+          isVisible={showEvalPanel}
+          onClose={handleCloseEvalPanel}
+        />
       </div>
 
+      {/* Artifact（fixed 定位覆盖层，独立于评估面板） */}
       <Artifact
         attachments={attachments}
         chatId={id}
