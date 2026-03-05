@@ -16,6 +16,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
+import { useGlobalSpeechSynthesis } from "@/components/speech-synthesis-provider";
 import { SelectItem } from "@/components/ui/select";
 import { useAliStreamingSTT } from "@/hooks/use-ali-streaming-stt";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
@@ -106,6 +107,7 @@ function PureMultimodalInput({
   const { voiceMode } = useVoiceMode();
   const { isTtsDown, isSttDown } = useVoiceHealth();
   const { setPendingStt } = useVoiceProvider();
+  const { stop: stopTTS } = useGlobalSpeechSynthesis();
   const {
     startListening,
     stopListening,
@@ -141,6 +143,8 @@ function PureMultimodalInput({
     if (status !== "ready") {
       return;
     }
+    // AI 还在朗读时，用户按下录音按钮则自动停止 TTS
+    stopTTS();
     if (voiceUnavailable) {
       toast.error("语音服务暂时不可用，请联系管理员或稍后重试");
       return;
@@ -158,6 +162,7 @@ function PureMultimodalInput({
     startListening();
   }, [
     status,
+    stopTTS,
     startListening,
     voiceUnavailable,
     isStreamingConnected,
@@ -517,6 +522,8 @@ function PureMultimodalInput({
               "松开结束录音"
             ) : isStreamingFailed ? (
               <span className="text-yellow-600">低速语音模式</span>
+            ) : status !== "ready" ? (
+              "AI 回复中..."
             ) : (
               "按住说话"
             )}
@@ -530,7 +537,9 @@ function PureMultimodalInput({
                 ? "scale-110 border-red-500 bg-red-500/10 text-red-500 shadow-lg shadow-red-500/20"
                 : isProcessing
                   ? "border-muted bg-muted text-muted-foreground"
-                  : "border-primary bg-primary/5 text-primary hover:bg-primary/10 active:scale-95"
+                  : status !== "ready" || voiceUnavailable
+                    ? "cursor-not-allowed border-muted bg-muted/50 text-muted-foreground opacity-50"
+                    : "border-primary bg-primary/5 text-primary hover:bg-primary/10 active:scale-95"
             )}
             data-testid="voice-record-button"
             disabled={

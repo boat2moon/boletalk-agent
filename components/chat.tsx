@@ -86,6 +86,8 @@ export function Chat({
   const voiceModeRef = useRef(voiceMode);
   // 组件挂载标志：防止卸载后 onData 闭包仍触发 TTS
   const mountedRef = useRef(true);
+  // 语音模式下，标记 LLM 文本生成已完成（但 TTS 可能还在处理）
+  const [isTextDone, setIsTextDone] = useState(false);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -316,12 +318,20 @@ export function Chat({
           setTtsProvider(lastAssistantMsg.id, provider);
         }
       }
+      // 收到 data-textDone 事件：LLM 文本生成完毕（TTS 还在处理）
+      if (
+        (dataPart as any).type === "data-textDone" &&
+        voiceModeRef.current === "voice"
+      ) {
+        setIsTextDone(true);
+      }
     },
     onFinish: () => {
       // 标记流式 TTS 结束，让 MediaSource 正确 endOfStream
       if (voiceModeRef.current === "voice") {
         endStreamingWithCache();
       }
+      setIsTextDone(false); // 重置，为下一次对话准备
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
@@ -477,7 +487,7 @@ export function Chat({
           regenerate={regenerate}
           selectedModelId={initialChatModel}
           setMessages={setMessages}
-          status={status}
+          status={isTextDone ? "ready" : status}
           votes={votes}
         />
 
@@ -496,7 +506,7 @@ export function Chat({
               setAttachments={setAttachments}
               setInput={setInput}
               setMessages={setMessages}
-              status={status}
+              status={isTextDone ? "ready" : status}
               stop={stop}
             />
           )}

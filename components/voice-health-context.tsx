@@ -203,8 +203,11 @@ export function VoiceHealthProvider({ children }: { children: ReactNode }) {
   const reportFailure = useCallback(
     (providerKey: string) => {
       markFailed(providerKey);
+      if (shouldToast(providerKey)) {
+        toast.warning(`${displayProvider(providerKey)} 服务异常`);
+      }
     },
-    [markFailed]
+    [markFailed, shouldToast]
   );
 
   const reportSuccess = useCallback(

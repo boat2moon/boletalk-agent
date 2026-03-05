@@ -29,7 +29,7 @@ export function useSpeechSynthesis() {
         const response = await fetch("/api/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: text.slice(0, 1024) }),
+          body: JSON.stringify({ text }),
           signal,
         });
 

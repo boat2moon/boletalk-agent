@@ -188,62 +188,30 @@ export function createChatStream({
           }
         };
 
-        // 实时流式 TTS：依次尝试 豆包 → CosyVoice → 逐句 MiniMax
-        let usedStreamingTTS = false;
-        const degraded: string[] = [];
+        // ================================================================
+        //  长连接 TTS 级联：从 textStream 实时拆句，一个连接持续灌入
+        //  只消费一次 textStream，避免 getter 重复创建全量流副本
+        //  连接级降级：整个连接失败才切换下一个 provider
+        // ================================================================
 
-        // ── 第1级：豆包双向流式 TTS ──
-        try {
-          for await (const audioChunk of streamTTSFromDoubao(
-            result.textStream
-          )) {
-            dataStream.write({ type: "data-ttsAudio", data: audioChunk });
-            releaseTextBuffer();
-          }
-          usedStreamingTTS = true;
-          dataStream.write({
-            type: "data-ttsProvider",
-            data: { provider: "doubao-tts", degraded },
-          });
-        } catch (doubaoError) {
-          console.warn("[agent] Doubao TTS failed:", doubaoError);
-          degraded.push("doubao-tts");
-        }
+        // biome-ignore lint/performance/useTopLevelRegex: regex used inside stream callback
+        const SENTENCE_END = /[。！？!?.;\n]/;
+        const MIN_CHUNK_SIZE = 200;
 
-        // ── 第2级：阿里云 CosyVoice 流式 TTS ──
-        if (!usedStreamingTTS) {
-          try {
-            for await (const audioChunk of streamTTSFromAli(
-              result.textStream
-            )) {
-              dataStream.write({ type: "data-ttsAudio", data: audioChunk });
-              releaseTextBuffer();
-            }
-            usedStreamingTTS = true;
-            dataStream.write({
-              type: "data-ttsProvider",
-              data: { provider: "ali-tts", degraded },
-            });
-          } catch (aliError) {
-            console.warn("[agent] CosyVoice TTS failed:", aliError);
-            degraded.push("ali-tts");
-          }
-        }
+        // ── 1. 从 textStream 实时拆句，收集到 sentences 数组 ──
+        const sentences: string[] = [];
+        let sentencesDone = false;
+        let sentenceNotify: (() => void) | null = null;
+        const notifySentence = () => {
+          sentenceNotify?.();
+          sentenceNotify = null;
+        };
 
-        // ── 第3级：逐句调 MiniMax / 智谱（仅在所有流式 TTS 失败时）──
-        if (!usedStreamingTTS) {
-          // biome-ignore lint/performance/useTopLevelRegex: regex used inside stream callback
-          const SENTENCE_END = /[。！？!?.\n]/;
-          const MIN_CHUNK_SIZE = 200;
+        const sentenceProducer = (async () => {
           let accumulated = "";
-
           for await (const delta of result.textStream) {
             accumulated += delta;
 
-            let shouldTriggerTTS = false;
-            let chunkToPlay = "";
-
-            // 1. 找最后一个句子边界
             let lastBoundary = -1;
             for (let i = 0; i < accumulated.length; i++) {
               if (SENTENCE_END.test(accumulated[i])) {
@@ -252,39 +220,125 @@ export function createChatStream({
             }
 
             if (lastBoundary >= 0) {
-              chunkToPlay = accumulated.slice(0, lastBoundary + 1).trim();
+              const chunk = accumulated.slice(0, lastBoundary + 1).trim();
               accumulated = accumulated.slice(lastBoundary + 1);
-              shouldTriggerTTS = true;
+              if (chunk) {
+                sentences.push(chunk);
+                notifySentence();
+              }
             } else if (accumulated.length >= MIN_CHUNK_SIZE) {
-              chunkToPlay = accumulated.trim();
+              const chunk = accumulated.trim();
               accumulated = "";
-              shouldTriggerTTS = true;
-            }
-
-            if (shouldTriggerTTS && chunkToPlay) {
-              const ttsResult = await synthesizeSpeech(chunkToPlay);
-              if (ttsResult) {
-                dataStream.write({ type: "data-ttsAudio", data: ttsResult });
-                releaseTextBuffer();
+              if (chunk) {
+                sentences.push(chunk);
+                notifySentence();
               }
             }
           }
-
-          // LLM 输出结束，处理剩余文本
+          // 剩余文本
           if (accumulated.trim()) {
-            const ttsResult = await synthesizeSpeech(accumulated.trim());
+            sentences.push(accumulated.trim());
+            notifySentence();
+          }
+          sentencesDone = true;
+          notifySentence();
+          // 通知前端文本生成已完成（TTS 可能还在处理）
+          dataStream.write({ type: "data-textDone", data: true });
+        })();
+
+        // ── 2. 创建句子流迭代器（从 startIdx 开始，实时等待新句子）──
+        function createSentenceStream(startIdx = 0): AsyncIterable<string> {
+          let idx = startIdx;
+          return {
+            [Symbol.asyncIterator]() {
+              return {
+                async next(): Promise<IteratorResult<string>> {
+                  // 等待直到有新句子可用或全部完成
+                  while (idx >= sentences.length && !sentencesDone) {
+                    await new Promise<void>((r) => {
+                      sentenceNotify = r;
+                    });
+                  }
+                  if (idx < sentences.length) {
+                    return { value: sentences[idx++], done: false };
+                  }
+                  return { value: undefined as any, done: true };
+                },
+              };
+            },
+          };
+        }
+
+        // ── 3. 连接级 TTS 级联 ──
+        type TTSProvider = "doubao" | "ali" | "minimax";
+        let finalProvider: TTSProvider = "doubao";
+        const degraded: string[] = [];
+        let gotAudio = false;
+
+        // 第1级：豆包 — 一个长 WebSocket 连接，持续灌入句子
+        try {
+          for await (const audioChunk of streamTTSFromDoubao(
+            createSentenceStream(0)
+          )) {
+            dataStream.write({ type: "data-ttsAudio", data: audioChunk });
+            releaseTextBuffer();
+            gotAudio = true;
+          }
+          if (gotAudio) {
+            finalProvider = "doubao";
+          } else {
+            // WebSocket 连接成功但未产出任何音频，记录降级
+            console.warn("[agent] Doubao TTS produced no audio");
+            degraded.push("doubao-tts");
+          }
+        } catch (doubaoError) {
+          console.warn("[agent] Doubao TTS connection failed:", doubaoError);
+          degraded.push("doubao-tts");
+        }
+
+        // 第2级：阿里云 CosyVoice — 如果豆包完全没产出音频，从头开始
+        if (!gotAudio) {
+          try {
+            // 等待所有句子收集完毕（因为要为 Ali 创建新的迭代器）
+            await sentenceProducer;
+            for await (const audioChunk of streamTTSFromAli(
+              createSentenceStream(0)
+            )) {
+              dataStream.write({ type: "data-ttsAudio", data: audioChunk });
+              releaseTextBuffer();
+              gotAudio = true;
+            }
+            if (gotAudio) {
+              finalProvider = "ali";
+            } else {
+              console.warn("[agent] CosyVoice TTS produced no audio");
+              degraded.push("ali-tts");
+            }
+          } catch (aliError) {
+            console.warn("[agent] CosyVoice TTS connection failed:", aliError);
+            degraded.push("ali-tts");
+          }
+        }
+
+        // 第3级：MiniMax 逐句非流式兜底（所有流式 TTS 都失败时）
+        if (!gotAudio) {
+          await sentenceProducer; // 确保所有句子已收集
+          for (const sentence of sentences) {
+            const ttsResult = await synthesizeSpeech(sentence);
             if (ttsResult) {
               dataStream.write({ type: "data-ttsAudio", data: ttsResult });
               releaseTextBuffer();
+              gotAudio = true;
             }
           }
-
-          // 上报降级 provider 信息
-          dataStream.write({
-            type: "data-ttsProvider",
-            data: { provider: "minimax", degraded },
-          });
+          finalProvider = "minimax";
         }
+
+        // 上报实际使用的 TTS 提供商
+        dataStream.write({
+          type: "data-ttsProvider",
+          data: { provider: finalProvider, degraded },
+        });
 
         // 兜底放行
         if (!isFirstTtsReady) {
