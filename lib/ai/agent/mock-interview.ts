@@ -20,6 +20,7 @@ import { myProvider } from "@/lib/ai/providers";
 import { buildVoiceConstraint } from "@/lib/ai/toolkit/prompt-builder";
 import { createUsageFinishHandler } from "@/lib/ai/toolkit/usage";
 import { getBehaviouralQuestionsTool } from "@/lib/ai/tools/behavioural-questions";
+import { createMemoryReadTool } from "@/lib/ai/tools/memory-read";
 import { ragSearchTool } from "@/lib/ai/tools/rag-search";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
@@ -29,6 +30,8 @@ export type CreateMockInterviewStreamOptions = {
   voiceMode?: boolean;
   /** 职位 JD 上下文（可选） */
   jobContext?: string;
+  /** 当前用户 ID（用于 per-user 记忆检索） */
+  userId: string;
   /** 数据流写入器，用于推送 usage 和 tool 结果 */
   dataStream: UIMessageStreamWriter<ChatMessage>;
   /** 可选回调，usage 计算完成时通知外层 */
@@ -50,6 +53,7 @@ export function createMockInterviewStream({
   messages,
   voiceMode,
   jobContext,
+  userId,
   dataStream,
   onUsageUpdate,
 }: CreateMockInterviewStreamOptions) {
@@ -101,10 +105,15 @@ export function createMockInterviewStream({
     system: systemPrompt,
     messages: convertToModelMessages(messages),
     // 启用行为面试题 tool 和 RAG 检索 tool
-    experimental_activeTools: ["getBehaviouralQuestions", "ragSearch"],
+    experimental_activeTools: [
+      "getBehaviouralQuestions",
+      "ragSearch",
+      "memoryRead",
+    ],
     tools: {
       getBehaviouralQuestions: getBehaviouralQuestionsTool,
       ragSearch: ragSearchTool,
+      memoryRead: createMemoryReadTool(userId),
     },
     onFinish: createUsageFinishHandler({
       modelId: model.modelId,

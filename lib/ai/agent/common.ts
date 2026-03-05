@@ -19,6 +19,7 @@ import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
 import { createUsageFinishHandler } from "@/lib/ai/toolkit/usage";
+import { createMemoryReadTool } from "@/lib/ai/tools/memory-read";
 import { ragSearchTool } from "@/lib/ai/tools/rag-search";
 // Tools 已注释，保留 import 注释以备后续开启
 // import { createDocument } from "@/lib/ai/tools/create-document";
@@ -39,6 +40,8 @@ export type CreateDefaultStreamOptions = {
   voiceMode?: boolean;
   /** 职位 JD 上下文（可选） */
   jobContext?: string;
+  /** 当前用户 ID（用于 per-user 记忆检索） */
+  userId: string;
   dataStream: UIMessageStreamWriter<ChatMessage>;
   /** 可选回调，usage 计算完成时通知外层 */
   onUsageUpdate?: (usage: AppUsage) => void;
@@ -60,6 +63,7 @@ export function createDefaultStream({
   session,
   voiceMode,
   jobContext,
+  userId,
   dataStream,
   onUsageUpdate,
 }: CreateDefaultStreamOptions) {
@@ -78,6 +82,7 @@ export function createDefaultStream({
         ? []
         : [
             "ragSearch",
+            "memoryRead",
             // "getWeather",
             // "createDocument",
             // "updateDocument",
@@ -86,6 +91,7 @@ export function createDefaultStream({
     experimental_transform: smoothStream({ chunking: "word" }),
     tools: {
       ragSearch: ragSearchTool,
+      memoryRead: createMemoryReadTool(userId),
       // getWeather,
       // createDocument: createDocument({ session, dataStream }),
       // updateDocument: updateDocument({ session, dataStream }),

@@ -44,7 +44,10 @@ export type RAGResult = {
 type SearchOptions = {
   topK?: number;
   category?: string;
-  similarityThreshold?: number;
+  /** 文本重叠度阈值，用于去重相似内容的 chunk（默认 0.95） */
+  textOverlapThreshold?: number;
+  /** 向量余弦相似度最低阈值，低于此值的结果在 SQL 层直接丢弃（默认 0.3） */
+  minSimilarity?: number;
   /** 是否启用 HyDE（默认 true） */
   enableHyDE?: boolean;
   /** 是否启用 ReRank（默认 true） */
@@ -176,7 +179,8 @@ export async function searchKnowledge(
   const {
     topK = 5,
     category,
-    similarityThreshold = 0.95,
+    textOverlapThreshold = 0.95,
+    minSimilarity = 0.3,
     enableHyDE = true,
     enableReRank = true,
   } = options;
@@ -195,13 +199,14 @@ export async function searchKnowledge(
     const queryEmbedding = await embedQuery(searchText);
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
 
-    // 3. 并行执行向量检索和全文检索
+    // 3. 并行执行向量检索和全文检索（向量检索带相似度阈值过滤）
     const semanticQuery = category
       ? sql`
           SELECT id, content, source, category, "headerChain", "chunkIndex",
                  1 - (embedding <=> ${embeddingStr}::vector) AS similarity
           FROM "RagChunk"
           WHERE category = ${category}
+            AND 1 - (embedding <=> ${embeddingStr}::vector) > ${minSimilarity}
           ORDER BY embedding <=> ${embeddingStr}::vector
           LIMIT ${fetchK}
         `
@@ -209,6 +214,7 @@ export async function searchKnowledge(
           SELECT id, content, source, category, "headerChain", "chunkIndex",
                  1 - (embedding <=> ${embeddingStr}::vector) AS similarity
           FROM "RagChunk"
+          WHERE 1 - (embedding <=> ${embeddingStr}::vector) > ${minSimilarity}
           ORDER BY embedding <=> ${embeddingStr}::vector
           LIMIT ${fetchK}
         `;
@@ -293,7 +299,7 @@ export async function searchKnowledge(
       for (const existing of deduplicated) {
         if (
           calculateTextOverlap(item.content, existing.content) >
-          similarityThreshold
+          textOverlapThreshold
         ) {
           isDuplicate = true;
           break;
