@@ -151,30 +151,6 @@ export function useSpeechSynthesis() {
     setIsSpeaking(false);
   }, []);
 
-  // 单次播放（旧接口，消息朗读按钮用）
-  const speak = useCallback(
-    async (text: string) => {
-      if (!text.trim()) {
-        return;
-      }
-
-      // 停掉当前的
-      stop();
-      stoppedRef.current = false;
-
-      const controller = new AbortController();
-      abortControllersRef.current = [controller];
-      setIsSpeaking(true);
-
-      const blob = await fetchTTS(text, controller.signal);
-      if (blob && !stoppedRef.current) {
-        await playBlob(blob);
-      }
-      setIsSpeaking(false);
-    },
-    [fetchTTS, playBlob, stop]
-  );
-
   // chunk 播放：加入队列（立即开始 fetch，队列顺序播放）
   const speakChunk = useCallback(
     (text: string) => {
@@ -210,12 +186,22 @@ export function useSpeechSynthesis() {
       audioRef.current.pause();
       setIsSpeaking(false);
     }
+    // MSE 流式播放也需要暂停
+    if (mseAudioRef.current && !mseAudioRef.current.paused) {
+      mseAudioRef.current.pause();
+      setIsSpeaking(false);
+    }
   }, []);
 
   // 恢复当前播放
   const resume = useCallback(() => {
     if (audioRef.current?.paused) {
       audioRef.current.play().catch(console.error);
+      setIsSpeaking(true);
+    }
+    // MSE 流式播放也需要恢复
+    if (mseAudioRef.current?.paused) {
+      mseAudioRef.current.play().catch(console.error);
       setIsSpeaking(true);
     }
   }, []);
@@ -381,6 +367,94 @@ export function useSpeechSynthesis() {
     }
   }, []);
 
+  // 单次播放（消息朗读按钮用）
+  // 支持流式（X-Voice-Streaming: true → MSE 边收边播）和非流式两种模式
+  const speak = useCallback(
+    async (text: string) => {
+      if (!text.trim()) {
+        return;
+      }
+
+      // 停掉当前的
+      stop();
+      stoppedRef.current = false;
+
+      const controller = new AbortController();
+      abortControllersRef.current = [controller];
+      setIsSpeaking(true);
+
+      try {
+        const response = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: text.slice(0, 1024) }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok || stoppedRef.current) {
+          setIsSpeaking(false);
+          return;
+        }
+
+        // 健康追踪
+        const provider = response.headers.get("X-Voice-Provider") || "";
+        const degradedStr = response.headers.get("X-Voice-Degraded") || "";
+        const degradedList = degradedStr ? degradedStr.split(",") : [];
+        if (provider && provider !== "none") {
+          reportSuccess(provider, degradedList);
+        } else if (degradedList.length > 0) {
+          for (const d of degradedList) {
+            reportFailure(d);
+          }
+        }
+
+        const isStreaming =
+          response.headers.get("X-Voice-Streaming") === "true";
+
+        if (isStreaming && response.body) {
+          // ── 流式：逐 chunk 读取，通过 MSE 边收边播 ──
+          const reader = response.body.getReader();
+          try {
+            while (true) {
+              if (stoppedRef.current) {
+                reader.cancel();
+                break;
+              }
+              const { done, value } = await reader.read();
+              if (done) {
+                break;
+              }
+              // Uint8Array → base64
+              let binary = "";
+              for (const byte of value) {
+                binary += String.fromCharCode(byte);
+              }
+              const base64 = btoa(binary);
+              speakBase64(base64, "audio/mpeg");
+            }
+          } finally {
+            endStreaming();
+          }
+        } else {
+          // ── 非流式：完整下载后播放 ──
+          const blob = await response.blob();
+          if (blob && !stoppedRef.current) {
+            await playBlob(blob);
+          }
+          setIsSpeaking(false);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          // 用户主动停止，忽略
+        } else {
+          console.error("TTS speak error:", error);
+        }
+        setIsSpeaking(false);
+      }
+    },
+    [stop, playBlob, speakBase64, endStreaming, reportSuccess, reportFailure]
+  );
+
   // 组件卸载时清理
   useEffect(() => {
     return () => {
@@ -397,6 +471,19 @@ export function useSpeechSynthesis() {
     };
   }, []);
 
+  // 直接播放 Blob 数组（按顺序），复用 playBlob + 队列机制
+  const playBlobs = useCallback(
+    (blobs: Blob[]) => {
+      stoppedRef.current = false;
+      setIsSpeaking(true);
+      for (const blob of blobs) {
+        queueRef.current.push(Promise.resolve(blob));
+      }
+      processQueue();
+    },
+    [processQueue]
+  );
+
   return {
     speak,
     speakChunk,
@@ -407,5 +494,6 @@ export function useSpeechSynthesis() {
     pause,
     resume,
     isSpeaking,
+    playBlobs,
   };
 }

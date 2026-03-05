@@ -63,7 +63,7 @@ export async function classifyMessages(
   // 调用 AI SDK 的 generateObject，让 AI 输出结构化数据
   // 和普通的 generateText 不同，generateObject 会强制 AI 输出符合 schema 的 JSON
   const result = await generateObject({
-    model: myProvider.languageModel("chat-model"),
+    model: myProvider.languageModel("chat-model-glm"),
     system: classifySystemPrompt,
     messages: convertToModelMessages(messages),
     schema: classifySchema,

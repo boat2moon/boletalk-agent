@@ -53,6 +53,9 @@ export function createChatStream({
 
   const stream = createUIMessageStream({
     execute: async ({ writer: dataStream }) => {
+      const t0 = Date.now();
+      console.log("[⏱ TIMING] stream execute start");
+
       // 新建会话时，先推送标题给前端以便乐观更新侧边栏
       if (chatTitle) {
         dataStream.write({
@@ -61,7 +64,12 @@ export function createChatStream({
         });
       }
 
+      console.log(`[⏱ TIMING] classify start +${Date.now() - t0}ms`);
       const classification = await classifyMessages(messages);
+      console.log(
+        `[⏱ TIMING] classify done  +${Date.now() - t0}ms`,
+        classification
+      );
 
       let result:
         | ReturnType<typeof createResumeOptStream>
@@ -102,9 +110,28 @@ export function createChatStream({
 
       result.consumeStream();
 
-      const uiStream = result.toUIMessageStream({
-        sendReasoning: true,
-      });
+      console.log(`[⏱ TIMING] streamText created +${Date.now() - t0}ms`);
+
+      // 监听首token和流结束
+      let firstTokenLogged = false;
+      const uiStream = result
+        .toUIMessageStream({
+          sendReasoning: true,
+        })
+        .pipeThrough(
+          new TransformStream({
+            transform(chunk, controller) {
+              if (!firstTokenLogged) {
+                firstTokenLogged = true;
+                console.log(`[⏱ TIMING] first token    +${Date.now() - t0}ms`);
+              }
+              controller.enqueue(chunk);
+            },
+            flush() {
+              console.log(`[⏱ TIMING] stream done    +${Date.now() - t0}ms`);
+            },
+          })
+        );
 
       if (voiceMode) {
         // ========== 语音模式：延迟文本流直到第一段 TTS 首包准备完毕 ==========

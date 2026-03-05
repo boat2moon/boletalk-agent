@@ -66,41 +66,11 @@ export function SpeechSynthesisProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // 先停掉当前播放
+      // 先停掉当前播放，再通过 hook 的队列机制播放缓存的 blob
+      // 合并所有小 chunk 为一个大 Blob，避免逐个播放产生卡顿
       synthesis.stop();
-
-      // 将缓存的 blob 全部加入播放队列
-      // 利用 speakBase64 的底层队列实现（重新编码为 base64 太浪费，直接用 playBlobs）
-      // 这里我们需要直接使用底层 hook 的队列能力
-      // 最简单的做法：把 blob 转回 base64 或者直接用 URL 播放
-      // 但更高效的方式是扩展 hook 提供 playBlobs 方法
-      // 为了不改太多底层代码，这里用 blob → objectURL → Audio 方式直接播放
-
-      // 串行播放所有缓存的 blob
-      const playSequentially = async () => {
-        for (const blob of blobs) {
-          if (!blob) {
-            continue;
-          }
-          await new Promise<void>((resolve) => {
-            const url = URL.createObjectURL(blob);
-            const audio = new Audio(url);
-            audio.onended = () => {
-              URL.revokeObjectURL(url);
-              resolve();
-            };
-            audio.onerror = () => {
-              URL.revokeObjectURL(url);
-              resolve();
-            };
-            audio.play().catch(() => {
-              URL.revokeObjectURL(url);
-              resolve();
-            });
-          });
-        }
-      };
-      playSequentially();
+      const merged = new Blob(blobs, { type: blobs[0].type });
+      synthesis.playBlobs([merged]);
       return true;
     },
     [synthesis]

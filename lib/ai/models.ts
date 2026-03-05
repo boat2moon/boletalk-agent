@@ -9,13 +9,8 @@ export type ChatModel = {
 export const chatModels: ChatModel[] = [
   {
     id: "chat-model",
-    name: "DeepSeek Chat",
-    description: "DeepSeek V3 通用对话模型",
-  },
-  {
-    id: "chat-model-reasoning",
-    name: "DeepSeek Reasoner",
-    description: "DeepSeek R1 深度思考模型，支持链式推理",
+    name: "Qwen 3.5 Flash",
+    description: "通义千问 3.5 Flash 高速模型",
   },
   {
     id: "chat-model-glm",

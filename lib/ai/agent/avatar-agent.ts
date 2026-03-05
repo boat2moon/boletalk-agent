@@ -46,7 +46,7 @@ export type CreateAvatarResponseOptions = {
  * 执行 Avatar 面试官对话并播报
  *
  * 1. 使用共享 Prompt Builder 构建面试 Prompt
- * 2. 调用 DeepSeek Chat 生成回复
+ * 2. 调用 Qwen 3.5 Flash 生成回复
  * 3. 逐句发送给数字人播报
  *
  * @returns 完整的回复文本

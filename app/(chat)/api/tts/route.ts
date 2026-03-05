@@ -1,10 +1,83 @@
 /**
  * TTS API 路由
- * 优先使用 MiniMax Speech-02，降级到智谱 GLM-TTS
+ * 统一级联：豆包 → 阿里云 CosyVoice → MiniMax Speech-02 → 智谱 GLM-TTS
  * 响应头包含 X-Voice-Provider 和 X-Voice-Degraded 供前端健康追踪
  */
 
+import { streamTTSFromLLM as streamTTSFromAli } from "@/lib/ai/ali-tts";
+import { streamTTSFromLLM as streamTTSFromDoubao } from "@/lib/ai/doubao-tts";
+
 export const maxDuration = 60;
+
+/**
+ * 将完整文本包装为单元素异步可迭代对象，供 streamTTSFromLLM 消费
+ */
+// biome-ignore lint/suspicious/useAwait: async function* is needed to produce AsyncIterable
+async function* textToAsyncIterable(text: string): AsyncIterable<string> {
+  yield text;
+}
+
+/**
+ * 将流式 TTS 的音频 chunk 包装为 ReadableStream 返回给前端
+ */
+function streamingResponse(
+  generator: AsyncGenerator<{ audioBase64: string; mimeType: string }>,
+  provider: string,
+  degraded: string[]
+): Response {
+  const stream = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { done, value } = await generator.next();
+        if (done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(Buffer.from(value.audioBase64, "base64"));
+      } catch {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "audio/mpeg",
+      "Cache-Control": "no-cache",
+      "X-Voice-Provider": provider,
+      "X-Voice-Streaming": "true",
+      ...(degraded.length > 0
+        ? { "X-Voice-Degraded": degraded.join(",") }
+        : {}),
+    },
+  });
+}
+
+/**
+ * 豆包双向流式 TTS — 返回流式响应
+ */
+function tryDoubaoStreaming(text: string, degraded: string[]): Response | null {
+  try {
+    const generator = streamTTSFromDoubao(textToAsyncIterable(text));
+    return streamingResponse(generator, "doubao-tts", degraded);
+  } catch (error) {
+    console.warn("[api/tts] Doubao TTS init failed:", error);
+    return null;
+  }
+}
+
+/**
+ * 阿里云 CosyVoice 流式 TTS — 返回流式响应
+ */
+function tryAliStreaming(text: string, degraded: string[]): Response | null {
+  try {
+    const generator = streamTTSFromAli(textToAsyncIterable(text));
+    return streamingResponse(generator, "ali-tts", degraded);
+  } catch (error) {
+    console.warn("[api/tts] Ali CosyVoice TTS init failed:", error);
+    return null;
+  }
+}
 
 /**
  * 给 PCM 数据添加 WAV 文件头（智谱 GLM-TTS 降级用）
@@ -169,15 +242,30 @@ export async function POST(request: Request) {
 
   const degraded: string[] = [];
 
-  // 1. 优先 MiniMax
+  // 1. 优先豆包（流式）
+  const doubaoResult = tryDoubaoStreaming(text, degraded);
+  if (doubaoResult) {
+    return doubaoResult;
+  }
+  degraded.push("doubao-tts");
+
+  // 2. 阿里云 CosyVoice（流式）
+  const aliResult = tryAliStreaming(text, degraded);
+  if (aliResult) {
+    return aliResult;
+  }
+  degraded.push("ali-tts");
+
+  // 3. MiniMax（非流式）
   const minimaxResult = await tryMiniMax(text);
   if (minimaxResult) {
     minimaxResult.headers.set("X-Voice-Provider", "minimax");
+    minimaxResult.headers.set("X-Voice-Degraded", degraded.join(","));
     return minimaxResult;
   }
   degraded.push("minimax");
 
-  // 2. 降级智谱
+  // 4. 降级智谱（非流式）
   const zhipuResult = await fallbackZhipu(text);
   if (zhipuResult) {
     zhipuResult.headers.set("X-Voice-Provider", "zhipu");
@@ -186,7 +274,7 @@ export async function POST(request: Request) {
   }
   degraded.push("zhipu");
 
-  // 3. 全部失败
+  // 5. 全部失败
   return new Response("All TTS services unavailable", {
     status: 503,
     headers: {

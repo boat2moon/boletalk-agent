@@ -84,6 +84,14 @@ export function Chat({
   const { setSttProvider, setTtsProvider, consumePendingStt } =
     useVoiceProvider();
   const voiceModeRef = useRef(voiceMode);
+  // 组件挂载标志：防止卸载后 onData 闭包仍触发 TTS
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // 加载已有会话时，同步 voiceMode 到该会话的 chatType
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
@@ -109,13 +117,6 @@ export function Chat({
   useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
-
-  // 组件卸载时停止所有 TTS 音频播放（修复切换模式后声音残留）
-  useEffect(() => {
-    return () => {
-      stopSpeech();
-    };
-  }, [stopSpeech]);
 
   // Handle browser back/forward navigation
   useEffect(() => {
@@ -210,6 +211,14 @@ export function Chat({
       },
     }),
     onData: (dataPart) => {
+      // ⏱ 前端计时：首个 SSE 数据到达
+      if (sendStartRef.current > 0 && !firstDataRef.current) {
+        firstDataRef.current = true;
+        console.log(
+          `[⏱ FE-TIMING] first onData   +${Date.now() - sendStartRef.current}ms`,
+          (dataPart as any).type
+        );
+      }
       setDataStream((ds) => (ds ? [...ds, dataPart] : []));
       // 收到服务端推送的 AI 生成标题时，乐观插入侧边栏
       const part = dataPart as { type: string; data?: unknown };
@@ -272,7 +281,8 @@ export function Chat({
       // 接收服务端推送的 TTS 音频（同时缓存）
       if (
         dataPart.type === "data-ttsAudio" &&
-        voiceModeRef.current === "voice"
+        voiceModeRef.current === "voice" &&
+        mountedRef.current
       ) {
         const { audioBase64, mimeType } = dataPart.data;
         // 获取当前最后一条 assistant 消息的 ID 用于缓存
@@ -284,7 +294,8 @@ export function Chat({
       // 流式 TTS 健康上报（自定义 data stream 类型）
       if (
         (dataPart as any).type === "data-ttsProvider" &&
-        voiceModeRef.current === "voice"
+        voiceModeRef.current === "voice" &&
+        mountedRef.current
       ) {
         const { provider, degraded } = (dataPart as any).data as {
           provider: string;
@@ -334,11 +345,44 @@ export function Chat({
     },
   });
 
+  // 组件卸载时停止 TTS 音频播放（mountedRef 防御会阻止后续 onData 再触发新的 TTS）
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, [stopSpeech]);
+
+  // ⏱ 前端计时 ref
+  const sendStartRef = useRef(0);
+  const firstDataRef = useRef(false);
+  const prevStatusRef = useRef(status);
+
+  // ⏱ 监测 status 变化
+  useEffect(() => {
+    if (prevStatusRef.current !== status && sendStartRef.current > 0) {
+      console.log(
+        `[⏱ FE-TIMING] status: ${prevStatusRef.current} → ${status}  +${Date.now() - sendStartRef.current}ms`
+      );
+      if (status === "ready") {
+        console.log(
+          `[⏱ FE-TIMING] === total round-trip: ${Date.now() - sendStartRef.current}ms ===`
+        );
+        sendStartRef.current = 0;
+        firstDataRef.current = false;
+      }
+    }
+    prevStatusRef.current = status;
+  }, [status]);
+
   /**
    * 包装 sendMessage：首次发送消息时先在侧边栏插入骨架占位
    */
   const wrappedSendMessage: typeof sendMessage = useCallback(
     (...args: Parameters<typeof sendMessage>) => {
+      // ⏱ 前端计时：发起请求
+      sendStartRef.current = Date.now();
+      firstDataRef.current = false;
+      console.log("[⏱ FE-TIMING] sendMessage called");
       insertSkeletonToSidebar();
       return sendMessage(...args);
     },

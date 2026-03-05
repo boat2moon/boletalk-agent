@@ -35,6 +35,7 @@ import {
   saveChat,
   saveMessages,
   updateChatLastContextById,
+  updateChatTitleById,
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
@@ -186,10 +187,14 @@ export async function POST(request: Request) {
       }
       messagesFromDb = await getMessagesByChatId({ id });
     } else {
-      // 新建聊天时，用处理后的 newMessage 生成标题
-      chatTitle = await generateTitleFromUserMessage({
-        message: newMessage,
-      });
+      // 新建聊天：用用户消息前 50 个字符作为临时标题，避免阻塞等待 AI 生成
+      const userText = newMessage.parts
+        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join(" ")
+        .slice(0, 50)
+        .trim();
+      chatTitle = userText || "新对话";
 
       await saveChat({
         id,
@@ -197,6 +202,23 @@ export async function POST(request: Request) {
         title: chatTitle,
         visibility: selectedVisibilityType,
         chatType: voiceMode ? "voice" : "text",
+      });
+
+      // 真正的 AI 标题在响应发出后异步生成，不阻塞主流程
+      const capturedChatId = id;
+      const capturedMessage = newMessage;
+      after(async () => {
+        try {
+          const aiTitle = await generateTitleFromUserMessage({
+            message: capturedMessage,
+          });
+          await updateChatTitleById({
+            chatId: capturedChatId,
+            title: aiTitle,
+          });
+        } catch (err) {
+          console.warn("Async title generation failed:", err);
+        }
       });
     }
 

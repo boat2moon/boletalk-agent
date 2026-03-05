@@ -80,7 +80,7 @@ export const systemPrompt = ({
       : `${regularPrompt}\n\n${artifactsPrompt}`;
 
   if (voiceMode) {
-    return `${basePrompt}\n\n[语音模式特殊要求]：用户正在通过语音与你交流。你的回答必须口语化、简洁自然，就像面对面聊天一样。请绝对避免生成复杂的 Markdown 格式（如长列表、表格、代码块等），尽量用纯文本交流。直接给结论，不要超过 3-5 句。`;
+    return `${basePrompt}\n\n[语音模式特殊要求]：用户正在通过语音与你交流。你的回答必须口语化、简洁自然，就像面对面聊天一样。请绝对避免生成 Markdown 格式（如长列表、表格、代码块等），尽量用纯文本交流。直接给结论，不要超过 3-5 句。`;
   }
 
   return `${basePrompt}\n\n`;
