@@ -26,6 +26,7 @@ import { streamTTSFromLLM as streamTTSFromAli } from "@/lib/ai/ali-tts";
 import { streamTTSFromLLM as streamTTSFromDoubao } from "@/lib/ai/doubao-tts";
 import type { ChatModel } from "@/lib/ai/models";
 import type { RequestHints } from "@/lib/ai/prompts";
+import { writeChatMemory } from "@/lib/ai/toolkit/memory";
 import { synthesizeSpeech } from "@/lib/ai/tts";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
@@ -44,6 +45,8 @@ export type CreateChatStreamOptions = {
   intent?: string;
   /** 职位 JD 上下文（可选，由 buildJobContext 生成） */
   jobContext?: string;
+  /** 会话 ID（用于记忆写入的 source 标识） */
+  chatId: string;
   /** 外层回调：stream 完成后保存消息和 usage */
   onFinish?: (params: { messages: ChatMessage[]; usage?: AppUsage }) => void;
   /** 评估完成回调：将结果写入 DB */
@@ -59,10 +62,12 @@ export function createChatStream({
   chatTitle,
   intent,
   jobContext,
+  chatId,
   onFinish,
   onEvaluationComplete,
 }: CreateChatStreamOptions) {
   let finalMergedUsage: AppUsage | undefined;
+  const userId = session.user?.id ?? "";
 
   const stream = createUIMessageStream({
     execute: async ({ writer: dataStream }) => {
@@ -101,6 +106,19 @@ export function createChatStream({
           if (onEvaluationComplete) {
             await onEvaluationComplete(evaluationResult);
           }
+
+          // 后台异步写入记忆（fire-and-forget，不阻塞评估返回）
+          // 写入完整会话文本 + 评估结果
+          if (userId && chatId) {
+            writeChatMemory({
+              userId,
+              chatId,
+              messages,
+              evaluationResult,
+            }).catch((err) =>
+              console.error("[agent] Memory write failed (non-blocking):", err)
+            );
+          }
         } catch (error) {
           console.error("[agent] Evaluation failed:", error);
           dataStream.write({
@@ -131,6 +149,7 @@ export function createChatStream({
           messages,
           voiceMode,
           jobContext,
+          userId,
           dataStream,
           onUsageUpdate: (usage) => {
             finalMergedUsage = usage;
@@ -144,6 +163,7 @@ export function createChatStream({
           session,
           voiceMode,
           jobContext,
+          userId,
           dataStream,
           onUsageUpdate: (usage) => {
             finalMergedUsage = usage;

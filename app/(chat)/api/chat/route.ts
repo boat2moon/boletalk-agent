@@ -270,6 +270,7 @@ export async function POST(request: Request) {
       chatTitle,
       intent,
       jobContext: buildJobContext(selectedJobTemplate),
+      chatId: id,
       // 评估完成回调：将结构化评估结果写入 DB
       onEvaluationComplete: async (evaluationResult) => {
         try {

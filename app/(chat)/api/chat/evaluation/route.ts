@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { generateEvaluation } from "@/lib/ai/agent/evaluate";
+import { writeChatMemory } from "@/lib/ai/toolkit/memory";
 import {
   getEvaluationByChatId,
   getMessagesByChatId,
@@ -105,6 +106,17 @@ export async function POST(request: Request) {
       scores: evaluationResult.scores,
       comments: evaluationResult.comments,
     });
+
+    // 后台异步写入记忆（fire-and-forget，不阻塞 API 响应）
+    // 写入完整会话文本 + 评估结果
+    writeChatMemory({
+      userId: session.user.id,
+      chatId,
+      messages,
+      evaluationResult,
+    }).catch((err) =>
+      console.error("[evaluation API] Memory write failed (non-blocking):", err)
+    );
 
     return Response.json(evaluationResult);
   } catch (error) {
