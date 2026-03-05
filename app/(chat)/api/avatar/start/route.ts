@@ -14,6 +14,7 @@ import { z } from "zod";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import { startAvatarInstance } from "@/lib/ai/avatar-client";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { buildJobContext } from "@/lib/ai/job-templates";
 import {
   analyzeResume,
   type ResumeAnalysis,
@@ -30,6 +31,8 @@ const requestSchema = z.object({
   chatId: z.string(),
   /** 简历文本（可选，前端解析 PDF 后以 base64 传入） */
   resumeText: z.string().optional(),
+  /** 选中的职位 JD 模板（可选） */
+  selectedJobTemplate: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -96,6 +99,7 @@ export async function POST(request: Request) {
       sessionId,
       channel,
       resumeAnalysis,
+      jobContext: buildJobContext(body.selectedJobTemplate) || undefined,
     });
   } catch (error) {
     if (error instanceof ChatSDKError) {

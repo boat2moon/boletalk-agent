@@ -43,6 +43,8 @@ type AvatarVoiceOptions = {
   messages: Array<{ role: string; content: string }>;
   /** 简历上下文（可选，注入 system prompt） */
   resumeContext?: string;
+  /** 职位 JD 上下文（可选，注入 system prompt） */
+  jobContext?: string;
   /** 数字人是否正在播报（半双工控制） */
   isAvatarSpeaking: boolean;
   /** 收到识别文字时的回调 */
@@ -100,6 +102,7 @@ export function useAvatarVoice({
   sessionId,
   messages,
   resumeContext,
+  jobContext,
   isAvatarSpeaking,
   onTranscript,
   onAgentReply,
@@ -149,6 +152,7 @@ export function useAvatarVoice({
           userText: text,
           messages,
           resumeContext,
+          jobContext,
           interrupt: shouldInterrupt,
         }),
       });
@@ -175,7 +179,7 @@ export function useAvatarVoice({
         }
       }, estimatedDuration);
     },
-    [sessionId, messages, resumeContext, onTranscript, onAgentReply]
+    [sessionId, messages, resumeContext, jobContext, onTranscript, onAgentReply]
   );
 
   /**

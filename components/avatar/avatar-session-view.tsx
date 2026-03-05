@@ -145,11 +145,14 @@ export function AvatarSessionView({
   sessionId,
   channel,
   resumeAnalysis,
+  jobContext,
   onEnd,
 }: {
   sessionId: string;
   channel: AvatarChannel;
   resumeAnalysis: ResumeAnalysis | null;
+  /** 职位 JD 上下文（可选） */
+  jobContext?: string;
   onEnd: (messages: AvatarMessage[], duration: number) => void;
 }) {
   const [messages, setMessages] = useState<AvatarMessage[]>([]);
@@ -179,6 +182,7 @@ export function AvatarSessionView({
     sessionId,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
     resumeContext,
+    jobContext,
     isAvatarSpeaking,
     onTranscript: useCallback((text: string) => {
       // VAD 识别到用户说话 → 添加用户消息
@@ -348,6 +352,7 @@ export function AvatarSessionView({
             content: m.content,
           })),
           resumeContext,
+          jobContext,
         }),
       });
 
@@ -378,7 +383,7 @@ export function AvatarSessionView({
     } finally {
       setIsSending(false);
     }
-  }, [inputText, isSending, sessionId, messages, resumeContext]);
+  }, [inputText, isSending, sessionId, messages, resumeContext, jobContext]);
 
   /**
    * 结束面试

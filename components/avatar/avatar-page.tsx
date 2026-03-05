@@ -15,6 +15,11 @@ import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { ChatHeader } from "@/components/chat-header";
 import {
+  EvaluationCard,
+  type EvaluationData,
+  EvaluationLoading,
+} from "@/components/evaluation-card";
+import {
   type ChatHistory,
   getChatHistoryPaginationKey,
 } from "@/components/sidebar-history";
@@ -61,6 +66,10 @@ export function AvatarPage({
   /** 前端展示的启动进度文案 */
   const [bootStatus, setBootStatus] = useState<string>("");
   const chatIdRef = useRef(generateUUID());
+  const [selectedJobTemplate, setSelectedJobTemplate] = useState<
+    string | undefined
+  >();
+  const [jobContext, setJobContext] = useState<string | undefined>();
   const { mutate } = useSWRConfig();
 
   /**
@@ -118,6 +127,7 @@ export function AvatarPage({
           body: JSON.stringify({
             chatId: chatIdRef.current,
             resumeText,
+            selectedJobTemplate,
           }),
         });
 
@@ -130,6 +140,9 @@ export function AvatarPage({
 
         if (data.resumeAnalysis) {
           setResumeAnalysis(data.resumeAnalysis);
+        }
+        if (data.jobContext) {
+          setJobContext(data.jobContext);
         }
 
         setBootStatus("");
@@ -175,7 +188,7 @@ export function AvatarPage({
         );
       }
     },
-    [mutate]
+    [mutate, selectedJobTemplate]
   );
 
   /**
@@ -255,13 +268,16 @@ export function AvatarPage({
       {phase === "preparation" && (
         <AvatarPreparationView
           bootStatus={bootStatus}
+          onJobTemplateChange={setSelectedJobTemplate}
           onStart={handleStartInterview}
+          selectedJobTemplate={selectedJobTemplate}
         />
       )}
 
       {phase === "session" && sessionId && channel && (
         <AvatarSessionView
           channel={channel}
+          jobContext={jobContext}
           onEnd={handleSessionEnd}
           resumeAnalysis={resumeAnalysis}
           sessionId={sessionId}
@@ -269,51 +285,132 @@ export function AvatarPage({
       )}
 
       {phase === "summary" && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
-          <div className="text-center">
-            <h2 className="font-bold text-2xl">面试结束</h2>
-            <p className="mt-2 text-muted-foreground text-sm">
-              本次视频面试时长：{Math.floor(sessionDuration / 60)} 分{" "}
-              {sessionDuration % 60} 秒
-            </p>
-          </div>
+        <AvatarSummary
+          chatId={chatIdRef.current}
+          messages={messages}
+          onNewInterview={() => {
+            chatIdRef.current = generateUUID();
+            setSessionId(null);
+            setChannel(null);
+            setMessages([]);
+            setSessionDuration(0);
+            setResumeAnalysis(null);
+            setPhase("preparation");
+          }}
+          sessionDuration={sessionDuration}
+        />
+      )}
+    </div>
+  );
+}
 
-          {/* 对话记录 */}
-          <div className="w-full max-w-2xl space-y-3">
-            {messages.map((msg, _i) => (
-              <div
-                className={`rounded-xl px-4 py-3 ${
-                  msg.role === "user"
-                    ? "ml-8 bg-primary/10 text-right"
-                    : "mr-8 bg-muted"
-                }`}
-                key={`msg-${msg.timestamp}`}
-              >
-                <p className="mb-1 font-medium text-muted-foreground text-xs">
-                  {msg.role === "user" ? "你" : "面试官"}
-                </p>
-                <p className="text-sm">{msg.content}</p>
-              </div>
-            ))}
-          </div>
+/**
+ * Avatar 面试总结子组件
+ *
+ * 自动生成/加载面试评估，展示对话记录。
+ */
+function AvatarSummary({
+  chatId,
+  messages,
+  sessionDuration,
+  onNewInterview,
+}: {
+  chatId: string;
+  messages: AvatarMessage[];
+  sessionDuration: number;
+  onNewInterview: () => void;
+}) {
+  const [evaluationData, setEvaluationData] = useState<EvaluationData | null>(
+    null
+  );
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
 
+  const fetchOrGenerateEvaluation = useCallback(async () => {
+    setEvaluationLoading(true);
+    try {
+      const existing = await fetch(`/api/chat/evaluation?chatId=${chatId}`);
+      if (existing.ok) {
+        setEvaluationData(await existing.json());
+        setEvaluationLoading(false);
+        return;
+      }
+      if (existing.status === 404) {
+        const res = await fetch("/api/chat/evaluation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chatId }),
+        });
+        if (res.ok) {
+          setEvaluationData(await res.json());
+        } else {
+          const errData = await res.json().catch(() => null);
+          setEvaluationError(errData?.error || "评估生成失败");
+        }
+      }
+    } catch {
+      setEvaluationError("网络错误，评估加载失败");
+    } finally {
+      setEvaluationLoading(false);
+    }
+  }, [chatId]);
+
+  useEffect(() => {
+    fetchOrGenerateEvaluation();
+  }, [fetchOrGenerateEvaluation]);
+
+  return (
+    <div className="flex flex-1 flex-col overflow-y-auto px-4 py-6">
+      <div className="mx-auto w-full max-w-2xl space-y-6">
+        <div className="text-center">
+          <h2 className="font-bold text-2xl">面试结束</h2>
+          <p className="mt-2 text-muted-foreground text-sm">
+            本次视频面试时长：{Math.floor(sessionDuration / 60)} 分{" "}
+            {sessionDuration % 60} 秒
+          </p>
+        </div>
+
+        {/* AI 面试评估 */}
+        <div className="rounded-xl border p-4">
+          <h3 className="mb-3 font-semibold text-sm">📊 面试评估</h3>
+          {evaluationLoading ? (
+            <EvaluationLoading />
+          ) : evaluationError ? (
+            <p className="text-destructive text-sm">{evaluationError}</p>
+          ) : evaluationData ? (
+            <EvaluationCard compact data={evaluationData} />
+          ) : null}
+        </div>
+
+        {/* 对话记录 */}
+        <div className="space-y-3">
+          {messages.map((msg) => (
+            <div
+              className={`rounded-xl px-4 py-3 ${
+                msg.role === "user"
+                  ? "ml-8 bg-primary/10 text-right"
+                  : "mr-8 bg-muted"
+              }`}
+              key={`msg-${msg.timestamp}`}
+            >
+              <p className="mb-1 font-medium text-muted-foreground text-xs">
+                {msg.role === "user" ? "你" : "面试官"}
+              </p>
+              <p className="text-sm">{msg.content}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="pb-6 text-center">
           <button
-            className="mt-4 rounded-xl bg-primary px-6 py-3 font-medium text-primary-foreground text-sm transition-colors hover:bg-primary/90"
-            onClick={() => {
-              chatIdRef.current = generateUUID();
-              setSessionId(null);
-              setChannel(null);
-              setMessages([]);
-              setSessionDuration(0);
-              setResumeAnalysis(null);
-              setPhase("preparation");
-            }}
+            className="rounded-xl bg-primary px-6 py-3 font-medium text-primary-foreground text-sm transition-colors hover:bg-primary/90"
+            onClick={onNewInterview}
             type="button"
           >
             开始新面试
           </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

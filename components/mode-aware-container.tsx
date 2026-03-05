@@ -32,15 +32,21 @@ export function ModeAwareContainer({
 }) {
   const { voiceMode } = useVoiceMode();
   const [hasActiveChat, setHasActiveChat] = useState(false);
+  const [evaluationLocked, setEvaluationLocked] = useState(false);
 
   const handleHasActiveChatChange = useCallback((hasActive: boolean) => {
     setHasActiveChat(hasActive);
+  }, []);
+
+  const handleEvaluationLockChange = useCallback((locked: boolean) => {
+    setEvaluationLocked(locked);
   }, []);
 
   return (
     <div className="flex h-dvh flex-col">
       <ChatHeader
         chatId={chatId}
+        evaluationLocked={evaluationLocked}
         hasActiveChat={hasActiveChat}
         isReadonly={isReadonly}
         selectedVisibilityType={selectedVisibilityType}
@@ -61,6 +67,7 @@ export function ModeAwareContainer({
         cloneElement(children, {
           hideHeader: true,
           onHasActiveChatChange: handleHasActiveChatChange,
+          onEvaluationLockChange: handleEvaluationLockChange,
         })
       )}
     </div>

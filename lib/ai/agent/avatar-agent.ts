@@ -38,6 +38,8 @@ export type CreateAvatarResponseOptions = {
   }>;
   /** 简历分析上下文（首次发送时注入） */
   resumeContext?: string;
+  /** 职位 JD 上下文（可选） */
+  jobContext?: string;
   /** 是否打断当前正在播报的内容 */
   interrupt?: boolean;
 };
@@ -56,12 +58,14 @@ export async function createAvatarResponse({
   userText,
   messages = [],
   resumeContext,
+  jobContext,
   interrupt = false,
 }: CreateAvatarResponseOptions): Promise<string> {
   // 使用共享 Prompt Builder 构建面试官 System Prompt
   const systemPrompt = buildInterviewPrompt({
     mode: "avatar",
     resumeContext,
+    jobContext,
   });
 
   const llmMessages: CoreMessage[] = [

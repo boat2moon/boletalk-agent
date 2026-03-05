@@ -13,6 +13,7 @@
 import { FileText, Loader2, Mic, Upload, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+import { JobTemplateSelector } from "@/components/job-template-selector";
 import { Button } from "@/components/ui/button";
 import { realtimeModels } from "@/lib/ai/realtime-models";
 
@@ -37,10 +38,14 @@ export function PreparationView({
   selectedModel,
   onModelChange,
   onStart,
+  selectedJobTemplate,
+  onJobTemplateChange,
 }: {
   selectedModel: string;
   onModelChange: (model: string) => void;
   onStart: (resumeText?: string) => Promise<void>;
+  selectedJobTemplate?: string;
+  onJobTemplateChange?: (templateId?: string) => void;
 }) {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeText, setResumeText] = useState<string>("");
@@ -166,6 +171,15 @@ export function PreparationView({
             </button>
           )}
         </div>
+
+        {/* 岗位 JD 选择 */}
+        {onJobTemplateChange && (
+          <JobTemplateSelector
+            onTemplateChange={onJobTemplateChange}
+            selectedTemplate={selectedJobTemplate}
+            variant="full"
+          />
+        )}
 
         {/* 模型选择 */}
         <div className="w-full max-w-md">

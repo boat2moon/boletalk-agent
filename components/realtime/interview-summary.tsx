@@ -7,10 +7,17 @@
  * - 面试时长
  * - 完整的对话记录（transcript）
  * - 简历分析结果（如有）
+ * - AI 面试评估（自动生成）
  * - 操作按钮（再来一次 / 查看历史）
  */
 
 import { Clock, MessageSquare, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  EvaluationCard,
+  type EvaluationData,
+  EvaluationLoading,
+} from "@/components/evaluation-card";
 import { Button } from "@/components/ui/button";
 import type { ResumeAnalysis } from "@/lib/ai/toolkit/resume-analyzer";
 import type { TranscriptEntry } from "./realtime-page";
@@ -20,11 +27,14 @@ export function InterviewSummary({
   callDuration,
   resumeAnalysis,
   onNewInterview,
+  chatId,
 }: {
   transcript: TranscriptEntry[];
   callDuration: number;
   resumeAnalysis: ResumeAnalysis | null;
   onNewInterview: () => void;
+  /** 当前会话 ID，用于生成/加载评估 */
+  chatId?: string;
 }) {
   const formatDuration = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -32,6 +42,56 @@ export function InterviewSummary({
     const s = totalSeconds % 60;
     return `${m} 分 ${s} 秒`;
   };
+
+  // ── 面试评估 ──
+  const [evaluationData, setEvaluationData] = useState<EvaluationData | null>(
+    null
+  );
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
+
+  const fetchOrGenerateEvaluation = useCallback(async () => {
+    if (!chatId) {
+      return;
+    }
+
+    setEvaluationLoading(true);
+    try {
+      // 先查已有
+      const existing = await fetch(`/api/chat/evaluation?chatId=${chatId}`);
+      if (existing.ok) {
+        const data = await existing.json();
+        setEvaluationData(data);
+        setEvaluationLoading(false);
+        return;
+      }
+
+      // 404 则生成新的
+      if (existing.status === 404) {
+        const res = await fetch("/api/chat/evaluation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chatId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setEvaluationData(data);
+        } else {
+          const errData = await res.json().catch(() => null);
+          setEvaluationError(errData?.error || "评估生成失败");
+        }
+      }
+    } catch {
+      setEvaluationError("网络错误，评估加载失败");
+    } finally {
+      setEvaluationLoading(false);
+    }
+  }, [chatId]);
+
+  // 挂载时自动生成评估
+  useEffect(() => {
+    fetchOrGenerateEvaluation();
+  }, [fetchOrGenerateEvaluation]);
 
   return (
     <div className="flex h-full flex-col">
@@ -54,6 +114,18 @@ export function InterviewSummary({
                 <p className="font-semibold">{transcript.length} 条</p>
               </div>
             </div>
+          </div>
+
+          {/* AI 面试评估 */}
+          <div className="rounded-xl border p-4">
+            <h3 className="mb-3 font-semibold text-sm">📊 面试评估</h3>
+            {evaluationLoading ? (
+              <EvaluationLoading />
+            ) : evaluationError ? (
+              <p className="text-destructive text-sm">{evaluationError}</p>
+            ) : evaluationData ? (
+              <EvaluationCard compact data={evaluationData} />
+            ) : null}
           </div>
 
           {/* 简历分析摘要 */}

@@ -22,6 +22,7 @@ import { auth, type UserType } from "@/app/(auth)/auth";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { createChatStream } from "@/lib/ai/agent";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { buildJobContext } from "@/lib/ai/job-templates";
 import type { ChatModel } from "@/lib/ai/models";
 import type { RequestHints } from "@/lib/ai/prompts";
 import {
@@ -33,6 +34,7 @@ import {
   getMessagesByChatId,
   recordChatApiCall,
   saveChat,
+  saveEvaluation,
   saveMessages,
   updateChatLastContextById,
   updateChatTitleById,
@@ -87,12 +89,16 @@ export async function POST(request: Request) {
       selectedChatModel,
       selectedVisibilityType,
       voiceMode,
+      intent,
+      selectedJobTemplate,
     }: {
       id: string;
       message: ChatMessage;
       selectedChatModel: ChatModel["id"];
       selectedVisibilityType: VisibilityType;
       voiceMode?: boolean;
+      intent?: string;
+      selectedJobTemplate?: string;
     } = requestBody;
 
     const session = await auth();
@@ -262,6 +268,22 @@ export async function POST(request: Request) {
       session: session!,
       voiceMode: voiceMode === true,
       chatTitle,
+      intent,
+      jobContext: buildJobContext(selectedJobTemplate),
+      // 评估完成回调：将结构化评估结果写入 DB
+      onEvaluationComplete: async (evaluationResult) => {
+        try {
+          await saveEvaluation({
+            chatId: id,
+            // biome-ignore lint/style/noNonNullAssertion: session is checked above
+            userId: session!.user.id,
+            scores: evaluationResult.scores,
+            comments: evaluationResult.comments,
+          });
+        } catch (err) {
+          console.warn("Failed to save evaluation to DB:", err);
+        }
+      },
       // onFinish 回调：保存 AI 回复消息和 usage 到数据库
       onFinish: async ({ messages: finishedMessages, usage }) => {
         await saveMessages({

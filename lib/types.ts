@@ -60,6 +60,23 @@ export type CustomUIDataTypes = {
     provider: string;
     degraded: string[];
   };
+  /** 面试评估结构化结果 */
+  evaluation: {
+    scores: {
+      technical: number;
+      communication: number;
+      logic: number;
+      project: number;
+      overall: number;
+    };
+    comments: {
+      summary: string;
+      strengths: string[];
+      improvements: string[];
+    };
+  };
+  /** 面试评估生成失败错误信息 */
+  evaluationError: string;
 };
 
 export type ChatMessage = UIMessage<

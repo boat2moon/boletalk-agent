@@ -51,6 +51,9 @@ export function RealtimePage({
   );
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [callDuration, setCallDuration] = useState(0);
+  const [selectedJobTemplate, setSelectedJobTemplate] = useState<
+    string | undefined
+  >();
   const chatIdRef = useRef(generateUUID());
   const { mutate } = useSWRConfig();
 
@@ -69,6 +72,7 @@ export function RealtimePage({
             chatId: chatIdRef.current,
             selectedModel,
             resumeText,
+            selectedJobTemplate,
           }),
         });
 
@@ -129,7 +133,7 @@ export function RealtimePage({
         );
       }
     },
-    [selectedModel, mutate]
+    [selectedModel, mutate, selectedJobTemplate]
   );
 
   const wsInfoRef = useRef<{
@@ -184,8 +188,10 @@ export function RealtimePage({
       )}
       {phase === "preparation" && (
         <PreparationView
+          onJobTemplateChange={setSelectedJobTemplate}
           onModelChange={setSelectedModel}
           onStart={handleStartInterview}
+          selectedJobTemplate={selectedJobTemplate}
           selectedModel={selectedModel}
         />
       )}
@@ -201,6 +207,7 @@ export function RealtimePage({
       {phase === "summary" && (
         <InterviewSummary
           callDuration={callDuration}
+          chatId={chatIdRef.current}
           onNewInterview={() => {
             // 重置状态
             chatIdRef.current = generateUUID();

@@ -25,6 +25,10 @@ export const postRequestBodySchema = z.object({
   selectedChatModel: z.enum(["chat-model", "chat-model-glm"]),
   selectedVisibilityType: z.enum(["public", "private"]),
   voiceMode: z.boolean().optional(),
+  /** 显式意图标识，如 'evaluate' */
+  intent: z.string().optional(),
+  /** 选中的职位 JD 模板 */
+  selectedJobTemplate: z.string().optional(),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;

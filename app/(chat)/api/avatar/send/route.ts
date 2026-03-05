@@ -34,6 +34,8 @@ const requestSchema = z.object({
     .default([]),
   /** 简历分析摘要（首次发送时注入） */
   resumeContext: z.string().optional(),
+  /** 职位 JD 上下文（注入面试官 prompt） */
+  jobContext: z.string().optional(),
   /** 是否打断当前正在播报的内容（用户抢话时为 true） */
   interrupt: z.boolean().optional().default(false),
 });
@@ -55,6 +57,7 @@ export async function POST(request: Request) {
       userText: body.userText,
       messages: body.messages,
       resumeContext: body.resumeContext,
+      jobContext: body.jobContext,
       interrupt: body.interrupt,
     });
 

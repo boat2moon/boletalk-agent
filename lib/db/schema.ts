@@ -232,3 +232,27 @@ export const chatApiCall = pgTable("ChatApiCall", {
 });
 
 export type ChatApiCall = InferSelectModel<typeof chatApiCall>;
+
+/**
+ * 面试评估表
+ *
+ * 存储 AI 对面试对话的结构化评估结果。
+ * 每个会话最多一条评估记录（chatId UNIQUE）。
+ */
+export const evaluation = pgTable("Evaluation", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  chatId: uuid("chatId")
+    .notNull()
+    .unique()
+    .references(() => chat.id, { onDelete: "cascade" }),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  /** 多维度评分 JSON { overall, technical, communication, logic, project } */
+  scores: jsonb("scores").notNull(),
+  /** 结构化评语 JSON { summary, strengths[], improvements[] } */
+  comments: jsonb("comments").notNull(),
+  createdAt: timestamp("createdAt").notNull(),
+});
+
+export type Evaluation = InferSelectModel<typeof evaluation>;
