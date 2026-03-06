@@ -27,7 +27,7 @@ import { streamTTSFromLLM as streamTTSFromDoubao } from "@/lib/ai/doubao-tts";
 import type { ChatModel } from "@/lib/ai/models";
 import type { RequestHints } from "@/lib/ai/prompts";
 import { writeChatMemory } from "@/lib/ai/toolkit/memory";
-import { synthesizeSpeech } from "@/lib/ai/tts";
+import { stripMarkdown, synthesizeSpeech } from "@/lib/ai/tts";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { generateUUID } from "@/lib/utils";
@@ -285,14 +285,15 @@ export function createChatStream({
             }
 
             if (lastBoundary >= 0) {
-              const chunk = accumulated.slice(0, lastBoundary + 1).trim();
+              const rawChunk = accumulated.slice(0, lastBoundary + 1).trim();
               accumulated = accumulated.slice(lastBoundary + 1);
+              const chunk = stripMarkdown(rawChunk);
               if (chunk) {
                 sentences.push(chunk);
                 notifySentence();
               }
             } else if (accumulated.length >= MIN_CHUNK_SIZE) {
-              const chunk = accumulated.trim();
+              const chunk = stripMarkdown(accumulated.trim());
               accumulated = "";
               if (chunk) {
                 sentences.push(chunk);
@@ -301,8 +302,9 @@ export function createChatStream({
             }
           }
           // 剩余文本
-          if (accumulated.trim()) {
-            sentences.push(accumulated.trim());
+          const remaining = stripMarkdown(accumulated.trim());
+          if (remaining) {
+            sentences.push(remaining);
             notifySentence();
           }
           sentencesDone = true;
@@ -386,6 +388,7 @@ export function createChatStream({
         }
 
         // 第3级：MiniMax 逐句非流式兜底（所有流式 TTS 都失败时）
+        // 注意：sentences 已经过 stripMarkdown 清洗
         if (!gotAudio) {
           await sentenceProducer; // 确保所有句子已收集
           for (const sentence of sentences) {

@@ -192,7 +192,7 @@ export function useAliStreamingSTT() {
     []
   );
 
-  /** 开始录音（建连 → 开始识别 → 采集音频） */
+  /** 开始录音（采集音频 → 建连 → 开始识别，音频预缓冲防吞字） */
   const startRecording = useCallback(async (): Promise<boolean> => {
     if (isRecordingRef.current) {
       return false;
@@ -214,7 +214,7 @@ export function useAliStreamingSTT() {
         isFinal: false,
       }));
 
-      // 先获取麦克风（避免连上 WS 后等用户授权导致超时）
+      // ── 1. 先启动音频采集（立即开始录音，不等 WebSocket） ──
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -224,7 +224,49 @@ export function useAliStreamingSTT() {
       });
       mediaStreamRef.current = stream;
 
-      // 建立 WebSocket
+      const audioContext = new AudioContext({ sampleRate: 16_000 });
+      audioContextRef.current = audioContext;
+
+      const blob = new Blob([WORKLET_CODE], {
+        type: "application/javascript",
+      });
+      const workletUrl = URL.createObjectURL(blob);
+      await audioContext.audioWorklet.addModule(workletUrl);
+      URL.revokeObjectURL(workletUrl);
+
+      const workletNode = new AudioWorkletNode(audioContext, "pcm-processor");
+      workletNodeRef.current = workletNode;
+
+      // 音频预缓冲：在 ASR 就绪之前，所有 PCM chunk 存入 preBuffer
+      const preBuffer: ArrayBuffer[] = [];
+      let asrReady = false;
+
+      workletNode.port.onmessage = (e) => {
+        if (e.data.type === "info") {
+          console.log(
+            `[ali-asr] AudioWorklet: sampleRate=${e.data.sampleRate}, ratio=${e.data.ratio}`
+          );
+          return;
+        }
+        if (e.data.type === "audio" && isRecordingRef.current) {
+          if (asrReady && wsRef.current?.readyState === WebSocket.OPEN) {
+            // ASR 已就绪，直接发送
+            wsRef.current.send(e.data.buffer as ArrayBuffer);
+          } else {
+            // ASR 未就绪，缓冲
+            preBuffer.push(e.data.buffer as ArrayBuffer);
+          }
+        }
+      };
+
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(workletNode);
+      workletNode.connect(audioContext.destination);
+
+      isRecordingRef.current = true;
+      console.log("[ali-asr] Audio capture started (pre-buffering)");
+
+      // ── 2. 建立 WebSocket + 等待 TranscriptionStarted ──
       const wsUrl = `wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1?token=${token}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -246,7 +288,6 @@ export function useAliStreamingSTT() {
           console.log(
             "[ali-asr] WebSocket connected, sending StartTranscription"
           );
-          // 立即发送 StartTranscription（防止空闲超时）
           sendCommand(ws, appkey, "StartTranscription", {
             format: "pcm",
             sample_rate: 16_000,
@@ -256,7 +297,7 @@ export function useAliStreamingSTT() {
           });
         };
 
-        ws.onmessage = async (event) => {
+        ws.onmessage = (event) => {
           try {
             const msg = JSON.parse(event.data as string);
             const name = msg.header?.name;
@@ -281,47 +322,17 @@ export function useAliStreamingSTT() {
 
             switch (name) {
               case "TranscriptionStarted": {
+                // ── ASR 就绪：先 flush 预缓冲的音频，再切换到实时发送 ──
                 console.log(
-                  "[ali-asr] Transcription started, begin audio capture"
+                  `[ali-asr] Transcription started, flushing ${preBuffer.length} buffered chunks`
                 );
-                // 开始音频采集
-                isRecordingRef.current = true;
-
-                const audioContext = new AudioContext({ sampleRate: 16_000 });
-                audioContextRef.current = audioContext;
-
-                const blob = new Blob([WORKLET_CODE], {
-                  type: "application/javascript",
-                });
-                const workletUrl = URL.createObjectURL(blob);
-                await audioContext.audioWorklet.addModule(workletUrl);
-                URL.revokeObjectURL(workletUrl);
-
-                const workletNode = new AudioWorkletNode(
-                  audioContext,
-                  "pcm-processor"
-                );
-                workletNodeRef.current = workletNode;
-
-                workletNode.port.onmessage = (e) => {
-                  if (e.data.type === "info") {
-                    console.log(
-                      `[ali-asr] AudioWorklet: sampleRate=${e.data.sampleRate}, ratio=${e.data.ratio}`
-                    );
-                    return;
+                for (const chunk of preBuffer) {
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(chunk);
                   }
-                  if (
-                    e.data.type === "audio" &&
-                    isRecordingRef.current &&
-                    wsRef.current?.readyState === WebSocket.OPEN
-                  ) {
-                    wsRef.current.send(e.data.buffer as ArrayBuffer);
-                  }
-                };
-
-                const source = audioContext.createMediaStreamSource(stream);
-                source.connect(workletNode);
-                workletNode.connect(audioContext.destination);
+                }
+                preBuffer.length = 0; // 清空缓冲
+                asrReady = true; // 后续音频直接发送
 
                 if (!resolved) {
                   resolved = true;

@@ -6,6 +6,7 @@
 
 import { streamTTSFromLLM as streamTTSFromAli } from "@/lib/ai/ali-tts";
 import { streamTTSFromLLM as streamTTSFromDoubao } from "@/lib/ai/doubao-tts";
+import { stripMarkdown } from "@/lib/ai/tts";
 
 export const maxDuration = 60;
 
@@ -234,10 +235,19 @@ async function fallbackZhipu(text: string): Promise<Response | null> {
 }
 
 export async function POST(request: Request) {
-  const { text } = await request.json();
+  const { text: rawText } = await request.json();
 
-  if (!text || typeof text !== "string") {
+  if (!rawText || typeof rawText !== "string") {
     return new Response("Missing text parameter", { status: 400 });
+  }
+
+  // 清除 Markdown 语法，避免 TTS 模型无法处理 ##、**、- 等符号
+  const text = stripMarkdown(rawText);
+
+  if (!text) {
+    return new Response("Text is empty after markdown stripping", {
+      status: 400,
+    });
   }
 
   const degraded: string[] = [];

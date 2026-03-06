@@ -5,6 +5,44 @@
  */
 
 /**
+ * 清除 Markdown 语法，将文本转为适合 TTS 朗读的纯文本
+ */
+export function stripMarkdown(text: string): string {
+  return (
+    text
+      // 代码块（含语言标识）
+      .replace(/```[\s\S]*?```/g, "")
+      // 行内代码
+      .replace(/`([^`]+)`/g, "$1")
+      // 图片 ![alt](url)
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+      // 链接 [text](url)
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      // 标题 ## → 去掉 # 号
+      .replace(/^#{1,6}\s+/gm, "")
+      // 粗斜体 ***text*** 或 ___text___
+      .replace(/(\*{3}|_{3})(.+?)\1/g, "$2")
+      // 粗体 **text** 或 __text__
+      .replace(/(\*{2}|_{2})(.+?)\1/g, "$2")
+      // 斜体 *text* 或 _text_
+      .replace(/(\*|_)(.+?)\1/g, "$2")
+      // 删除线 ~~text~~
+      .replace(/~~(.+?)~~/g, "$1")
+      // 无序列表符 - / * / + 开头
+      .replace(/^[\s]*[-*+]\s+/gm, "")
+      // 有序列表 1. 2. 等
+      .replace(/^[\s]*\d+\.\s+/gm, "")
+      // 分隔线 --- / *** / ___
+      .replace(/^[-*_]{3,}\s*$/gm, "")
+      // 引用 > 开头
+      .replace(/^>\s+/gm, "")
+      // 多余空行压缩
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
+/**
  * 给 PCM 数据添加 WAV 文件头
  */
 function pcmToWav(
