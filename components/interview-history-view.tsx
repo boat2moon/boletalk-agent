@@ -12,6 +12,7 @@
 
 import { Clock, MessageSquare, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import useSWR from "swr";
 import { ChatHeader } from "@/components/chat-header";
 import {
@@ -21,6 +22,7 @@ import {
 } from "@/components/evaluation-card";
 import { Button } from "@/components/ui/button";
 import type { ChatMessage } from "@/lib/types";
+import { useVoiceMode } from "./voice-mode-context";
 
 export function InterviewHistoryView({
   chatId,
@@ -35,6 +37,13 @@ export function InterviewHistoryView({
   durationSeconds: number;
 }) {
   const router = useRouter();
+  const { setVoiceMode } = useVoiceMode();
+
+  // 同步 voiceMode 到当前会话的 chatType，让顶部模式选择器正确跟随
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only run on mount
+  useEffect(() => {
+    setVoiceMode(chatType);
+  }, [chatType]);
 
   const durationMinutes = Math.floor(durationSeconds / 60);
   const durationSecs = durationSeconds % 60;
