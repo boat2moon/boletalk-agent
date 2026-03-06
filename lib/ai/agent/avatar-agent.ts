@@ -81,6 +81,7 @@ export async function createAvatarResponse({
   const { text: replyText } = await generateText({
     model: myProvider.languageModel("chat-model"),
     messages: llmMessages,
+    maxRetries: 2,
   });
 
   // 逐句发送给数字人播报

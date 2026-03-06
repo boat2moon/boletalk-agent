@@ -148,23 +148,40 @@ export async function generateEvaluation(
 ): Promise<EvaluationResult> {
   const transcript = formatTranscript(messages);
 
-  const result = await generateText({
-    model: myProvider.languageModel("eval-model"),
-    system: evaluationSystemPrompt,
-    prompt: `以下是完整的面试对话记录，请对候选人的表现进行评估：\n\n${transcript}\n\n请严格按照 JSON 格式输出你的评估结果。`,
-    maxRetries: 2,
-  });
+  // 最多尝试 2 次（首次 + 1 次重试），覆盖 LLM 返回非法 JSON 的情况
+  const MAX_EVAL_ATTEMPTS = 2;
+  let lastError: Error | null = null;
 
-  console.log(
-    "[Evaluate] LLM raw text length:",
-    result.text.length,
-    "| finishReason:",
-    result.finishReason
-  );
+  for (let attempt = 0; attempt < MAX_EVAL_ATTEMPTS; attempt++) {
+    const result = await generateText({
+      model: myProvider.languageModel("eval-model"),
+      system: evaluationSystemPrompt,
+      prompt: `以下是完整的面试对话记录，请对候选人的表现进行评估：\n\n${transcript}\n\n请严格按照 JSON 格式输出你的评估结果。`,
+      maxRetries: 2,
+    });
 
-  if (!result.text) {
-    throw new Error("LLM 未返回任何文本输出");
+    console.log(
+      `[Evaluate] attempt ${attempt + 1}, LLM raw text length:`,
+      result.text.length,
+      "| finishReason:",
+      result.finishReason
+    );
+
+    if (!result.text) {
+      lastError = new Error("LLM 未返回任何文本输出");
+      continue;
+    }
+
+    try {
+      return parseEvaluationJSON(result.text);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(
+        `[Evaluate] JSON 解析失败 (attempt ${attempt + 1}):`,
+        lastError.message
+      );
+    }
   }
 
-  return parseEvaluationJSON(result.text);
+  throw lastError || new Error("评估生成失败");
 }

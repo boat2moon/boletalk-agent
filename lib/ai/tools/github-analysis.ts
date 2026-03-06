@@ -15,6 +15,7 @@
 import { generateObject, tool } from "ai";
 import { z } from "zod";
 import { myProvider } from "@/lib/ai/providers";
+import { fetchWithRetry } from "@/lib/utils/retry";
 
 // ─── MCP 版本（仅适用于本地开发 / 长期运行的 Node.js 服务） ─────────
 // import { getGitHubMCPClient } from "@/lib/ai/mcp/mcp-clients";
@@ -64,10 +65,14 @@ async function callGitHubAPI(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
 
-  const res = await fetch(url.toString(), {
-    headers,
-    signal: controller.signal,
-  });
+  const res = await fetchWithRetry(
+    url.toString(),
+    {
+      headers,
+      signal: controller.signal,
+    },
+    { maxRetries: 2, initialDelayMs: 1000 }
+  );
 
   clearTimeout(timeout);
 

@@ -450,12 +450,15 @@ export function CallView({
   );
 
   /**
-   * 初始化 WebSocket 连接和音频采集
+   * 初始化 WebSocket 连接和音频采集（含自动重连）
    */
   useEffect(() => {
     let cancelled = false;
+    let reconnectAttempt = 0;
+    const MAX_RECONNECT = 3;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const init = () => {
+    const connect = () => {
       try {
         // 1. 建立 WebSocket 连接
         const ws = new WebSocket(`${wsUrl}?token=${sessionToken}`);
@@ -466,6 +469,7 @@ export function CallView({
             return;
           }
           console.log("[WS] Connected to bole-server");
+          reconnectAttempt = 0; // 成功连接后重置重试计数
         };
 
         ws.onmessage = (event) => {
@@ -480,17 +484,38 @@ export function CallView({
             return;
           }
           console.log(`[WS] Closed: ${event.code} ${event.reason}`);
-          if (event.code !== 1000) {
-            toast.error(`连接断开: ${event.reason || `错误码 ${event.code}`}`);
+
+          // 正常关闭（用户主动挂断）→ 不重连
+          if (event.code === 1000) {
+            setStatus("disconnected");
+            return;
           }
-          setStatus("disconnected");
+
+          // 非正常关闭 → 尝试自动重连
+          if (reconnectAttempt < MAX_RECONNECT) {
+            reconnectAttempt++;
+            const delay = 1000 * 2 ** (reconnectAttempt - 1); // 1s, 2s, 4s
+            console.log(
+              `[WS] 自动重连 ${reconnectAttempt}/${MAX_RECONNECT}，${delay / 1000}s 后...`
+            );
+            toast.info(
+              `连接断开，正在重连 (${reconnectAttempt}/${MAX_RECONNECT})...`
+            );
+            setStatus("connecting");
+            reconnectTimer = setTimeout(connect, delay);
+          } else {
+            toast.error(
+              `连接断开: ${event.reason || `错误码 ${event.code}`}，已重试 ${MAX_RECONNECT} 次`
+            );
+            setStatus("disconnected");
+          }
         };
 
         ws.onerror = () => {
           if (cancelled) {
             return;
           }
-          setStatus("error");
+          // onerror 后通常会触发 onclose，重连逻辑在 onclose 中处理
         };
       } catch (err) {
         console.error("[Init] Failed:", err);
@@ -498,10 +523,13 @@ export function CallView({
       }
     };
 
-    init();
+    connect();
 
     return () => {
       cancelled = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
       cleanup();
     };
   }, [cleanup, handleServerMessage, sessionToken, wsUrl]);

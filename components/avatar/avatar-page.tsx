@@ -217,21 +217,37 @@ export function AvatarPage({
         }
       }
 
-      // 保存面试记录到数据库
-      try {
-        await fetch("/api/avatar/save-transcript", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chatId: chatIdRef.current,
-            messages: finalMessages,
-            duration,
-          }),
-        });
+      // 保存面试记录到数据库（带重试）
+      const MAX_SAVE_RETRIES = 2;
+      let saved = false;
+      for (let attempt = 0; attempt <= MAX_SAVE_RETRIES; attempt++) {
+        try {
+          await fetch("/api/avatar/save-transcript", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chatId: chatIdRef.current,
+              messages: finalMessages,
+              duration,
+            }),
+          });
+          saved = true;
+          break;
+        } catch (err) {
+          console.warn(
+            `保存视频面试记录失败 (${attempt + 1}/${MAX_SAVE_RETRIES + 1}):`,
+            err
+          );
+          if (attempt < MAX_SAVE_RETRIES) {
+            await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+          }
+        }
+      }
+      if (saved) {
         // 触发侧边栏 revalidate，同步后端保存的真实标题（含时长）
         mutate(unstable_serialize(getChatHistoryPaginationKey));
-      } catch (err) {
-        console.warn("保存视频面试记录失败:", err);
+      } else {
+        toast.error("面试记录保存失败，请手动截图保留对话内容");
       }
     },
     [sessionId, mutate]

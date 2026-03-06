@@ -154,22 +154,38 @@ export function RealtimePage({
       setCallDuration(duration);
       setPhase("summary");
 
-      // 后台保存面试记录
-      try {
-        await fetch("/api/realtime/save-transcript", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chatId: chatIdRef.current,
-            transcript: finalTranscript,
-            duration,
-            model: selectedModel,
-          }),
-        });
+      // 后台保存面试记录（带重试）
+      const MAX_SAVE_RETRIES = 2;
+      let saved = false;
+      for (let attempt = 0; attempt <= MAX_SAVE_RETRIES; attempt++) {
+        try {
+          await fetch("/api/realtime/save-transcript", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chatId: chatIdRef.current,
+              transcript: finalTranscript,
+              duration,
+              model: selectedModel,
+            }),
+          });
+          saved = true;
+          break;
+        } catch (err) {
+          console.warn(
+            `保存面试记录失败 (${attempt + 1}/${MAX_SAVE_RETRIES + 1}):`,
+            err
+          );
+          if (attempt < MAX_SAVE_RETRIES) {
+            await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+          }
+        }
+      }
+      if (saved) {
         // 触发侧边栏 revalidate，同步后端保存的真实标题（含时长）
         mutate(unstable_serialize(getChatHistoryPaginationKey));
-      } catch (err) {
-        console.warn("保存面试记录失败:", err);
+      } else {
+        toast.error("面试记录保存失败，请手动截图保留对话内容");
       }
     },
     [selectedModel, mutate]

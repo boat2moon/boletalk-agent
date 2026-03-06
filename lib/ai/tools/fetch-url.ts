@@ -14,6 +14,7 @@
 
 import { tool } from "ai";
 import { z } from "zod";
+import { fetchWithRetry } from "@/lib/utils/retry";
 
 // ─── MCP 版本（仅适用于本地开发 / 长期运行的 Node.js 服务） ─────────
 // import { getFetchMCPClient } from "@/lib/ai/mcp/mcp-clients";
@@ -62,15 +63,19 @@ export const fetchUrlTool = tool({
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15_000);
 
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (compatible; BoleTalk/1.0; +https://bltalk.top)",
-          Accept: "text/html,application/xhtml+xml,text/plain,*/*",
+      const res = await fetchWithRetry(
+        url,
+        {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (compatible; BoleTalk/1.0; +https://bltalk.top)",
+            Accept: "text/html,application/xhtml+xml,text/plain,*/*",
+          },
+          signal: controller.signal,
+          redirect: "follow",
         },
-        signal: controller.signal,
-        redirect: "follow",
-      });
+        { maxRetries: 1 }
+      );
 
       clearTimeout(timeout);
 

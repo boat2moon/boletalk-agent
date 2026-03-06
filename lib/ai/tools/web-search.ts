@@ -14,6 +14,7 @@
 
 import { tool } from "ai";
 import { z } from "zod";
+import { fetchWithRetry } from "@/lib/utils/retry";
 
 // ─── MCP 版本（通过 Tavily Remote MCP Server） ────────────────────
 // import { getWebSearchMCPClient } from "@/lib/ai/mcp/mcp-clients";
@@ -69,18 +70,22 @@ export const webSearchTool = tool({
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15_000);
 
-      const res = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          api_key: apiKey,
-          query,
-          max_results: 5,
-          include_answer: true,
-          search_depth: "basic",
-        }),
-        signal: controller.signal,
-      });
+      const res = await fetchWithRetry(
+        "https://api.tavily.com/search",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_key: apiKey,
+            query,
+            max_results: 5,
+            include_answer: true,
+            search_depth: "basic",
+          }),
+          signal: controller.signal,
+        },
+        { maxRetries: 1 }
+      );
 
       clearTimeout(timeout);
 

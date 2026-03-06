@@ -25,7 +25,9 @@ const MCP_API_KEY = process.env.MCP_API_KEY;
  * 未配置时跳过鉴权（开发环境便捷调试）。
  */
 function authenticate(req: Request): Response | null {
-  if (!MCP_API_KEY) return null; // 未配置 → 跳过鉴权
+  if (!MCP_API_KEY) {
+    return null; // 未配置 → 跳过鉴权
+  }
 
   const auth = req.headers.get("Authorization");
   if (auth !== `Bearer ${MCP_API_KEY}`) {
@@ -52,7 +54,9 @@ function authenticate(req: Request): Response | null {
 async function handleMCPRequest(req: Request): Promise<Response> {
   // Bearer Token 鉴权
   const authError = authenticate(req);
-  if (authError) return authError;
+  if (authError) {
+    return authError;
+  }
 
   try {
     // 每个请求创建新的 stateless transport

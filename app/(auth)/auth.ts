@@ -97,14 +97,19 @@ async function sendVerificationRequest(params: any) {
           const parsed = new URL(sourceUrl);
           actualHost = parsed.hostname;
           actualProto = parsed.protocol.replace(":", "");
-        } catch {}
+        } catch {
+          // ignore invalid URL
+        }
       }
     }
 
     if (actualHost && !actualHost.includes("0.0.0")) {
       const parsedUrl = new URL(url);
       parsedUrl.hostname = actualHost;
-      if (!actualHost.includes("localhost") && !actualHost.includes("127.0.0.1")) {
+      if (
+        !actualHost.includes("localhost") &&
+        !actualHost.includes("127.0.0.1")
+      ) {
         parsedUrl.port = "";
       }
       parsedUrl.protocol = actualProto;
@@ -115,13 +120,18 @@ async function sendVerificationRequest(params: any) {
           const parsedCb = new URL(callbackUrl);
           if (parsedCb.host.includes("0.0.0")) {
             parsedCb.hostname = actualHost;
-            if (!actualHost.includes("localhost") && !actualHost.includes("127.0.0.1")) {
+            if (
+              !actualHost.includes("localhost") &&
+              !actualHost.includes("127.0.0.1")
+            ) {
               parsedCb.port = "";
             }
             parsedCb.protocol = actualProto;
             parsedUrl.searchParams.set("callbackUrl", parsedCb.toString());
           }
-        } catch {}
+        } catch {
+          // ignore invalid callbackUrl
+        }
       }
       finalUrl = parsedUrl.toString();
       finalHost = actualHost;
@@ -285,8 +295,7 @@ export const {
           nextHeaders.get("x-forwarded-host") ||
           nextHeaders.get("host") ||
           "";
-        const actualProto =
-          nextHeaders.get("x-forwarded-proto") || "https";
+        const actualProto = nextHeaders.get("x-forwarded-proto") || "https";
 
         // 只有当 host 是 0.0.0.0 且有 FC 自定义域名或有效的 forwarded-host 时才替换
         const isFCInternal = actualHost.includes("0.0.0");
@@ -304,15 +313,20 @@ export const {
             const parsedUrl = new URL(url);
             if (parsedUrl.hostname.includes("0.0.0")) {
               parsedUrl.hostname =
-                actualHost.split(":")[0] ||
-                new URL(baseUrl).hostname;
-              if (!actualHost.includes("localhost") && !actualHost.includes("127.0.0.1") && !baseUrl.includes("localhost")) {
+                actualHost.split(":")[0] || new URL(baseUrl).hostname;
+              if (
+                !actualHost.includes("localhost") &&
+                !actualHost.includes("127.0.0.1") &&
+                !baseUrl.includes("localhost")
+              ) {
                 parsedUrl.port = "";
               }
               parsedUrl.protocol = actualProto;
               finalUrl = parsedUrl.toString();
             }
-          } catch {}
+          } catch {
+            // ignore invalid URL
+          }
         }
         return finalUrl;
       } catch {
