@@ -19,8 +19,11 @@ import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
 import { createUsageFinishHandler } from "@/lib/ai/toolkit/usage";
+import { fetchUrlTool } from "@/lib/ai/tools/fetch-url";
+import { githubAnalysisTool } from "@/lib/ai/tools/github-analysis";
 import { createMemoryReadTool } from "@/lib/ai/tools/memory-read";
 import { ragSearchTool } from "@/lib/ai/tools/rag-search";
+import { webSearchTool } from "@/lib/ai/tools/web-search";
 // Tools 已注释，保留 import 注释以备后续开启
 // import { createDocument } from "@/lib/ai/tools/create-document";
 // import { getWeather } from "@/lib/ai/tools/get-weather";
@@ -83,6 +86,9 @@ export function createDefaultStream({
         : [
             "ragSearch",
             "memoryRead",
+            "githubAnalysis",
+            "webSearch",
+            "fetchUrl",
             // "getWeather",
             // "createDocument",
             // "updateDocument",
@@ -92,6 +98,9 @@ export function createDefaultStream({
     tools: {
       ragSearch: ragSearchTool,
       memoryRead: createMemoryReadTool(userId),
+      githubAnalysis: githubAnalysisTool,
+      webSearch: webSearchTool,
+      fetchUrl: fetchUrlTool,
       // getWeather,
       // createDocument: createDocument({ session, dataStream }),
       // updateDocument: updateDocument({ session, dataStream }),

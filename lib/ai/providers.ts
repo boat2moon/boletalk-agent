@@ -49,6 +49,8 @@ export const myProvider = isTestEnvironment
         "chat-model": dashscope.chat("qwen3.5-flash"),
         "chat-model-glm": zhipu("glm-4-air"),
         "eval-model": deepseek("deepseek-chat"),
+        /** 内部管线用（意图分类、RAG、简历解析、GitHub 分析等） */
+        "internal-model": deepseek("deepseek-chat"),
         "title-model": dashscope.chat("qwen3.5-flash"),
         "artifact-model": dashscope.chat("qwen3.5-flash"),
       },

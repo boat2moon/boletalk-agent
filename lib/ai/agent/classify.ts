@@ -80,7 +80,7 @@ export async function classifyMessages(
 
   // ── 第二层：LLM 分类（概率性路由）──
   const result = await generateObject({
-    model: myProvider.languageModel("chat-model-glm"),
+    model: myProvider.languageModel("internal-model"),
     system: classifySystemPrompt,
     messages: convertToModelMessages(messages),
     schema: classifySchema,
