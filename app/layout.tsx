@@ -8,9 +8,58 @@ import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://boletalk.chat/"),
-  title: "伯乐Talk",
-  description: "AI 智能面试官，优化简历，模拟面试",
+  metadataBase: new URL("https://boletalk.chat"),
+  title: {
+    default: "伯乐Talk - AI 智能面试官",
+    template: "%s | 伯乐Talk",
+  },
+  description:
+    "伯乐Talk 是多模态 AI 面试助手，支持文本、语音、实时电话、数字人视频四种面试模式，集成 RAG 知识库检索与个性化记忆系统，帮助你高效准备面试",
+  keywords: [
+    "伯乐Talk",
+    "AI面试",
+    "模拟面试",
+    "智能面试官",
+    "简历优化",
+    "面试准备",
+    "AI面试助手",
+    "数字人面试",
+    "语音面试",
+    "面试评估",
+  ],
+  authors: [{ name: "伯乐Talk", url: "https://boletalk.chat" }],
+  creator: "伯乐Talk",
+  openGraph: {
+    type: "website",
+    locale: "zh_CN",
+    url: "https://boletalk.chat",
+    siteName: "伯乐Talk",
+    title: "伯乐Talk - AI 智能面试官",
+    description:
+      "多模态 AI 面试助手，支持文本、语音、实时电话、数字人视频四种面试模式，集成 RAG 知识库与个性化记忆系统",
+    images: [
+      {
+        url: "/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: "伯乐Talk - AI 智能面试官",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "伯乐Talk - AI 智能面试官",
+    description:
+      "多模态 AI 面试助手，支持文本、语音、实时电话、数字人视频四种面试模式",
+    images: ["/opengraph-image.png"],
+  },
+  alternates: {
+    canonical: "https://boletalk.chat",
+  },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/favicon.ico",
+  },
 };
 
 export const viewport = {
@@ -65,7 +114,7 @@ export default function RootLayout({
       // visual flicker before hydration. Hence the `suppressHydrationWarning`
       // prop is necessary to avoid the React hydration mismatch warning.
       // https://github.com/pacocoursey/next-themes?tab=readme-ov-file#with-app
-      lang="en"
+      lang="zh-CN"
       suppressHydrationWarning
     >
       <head>
