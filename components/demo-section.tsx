@@ -18,15 +18,25 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel";
 
-// GIF 使用原生 img 直接预加载，不做懒加载
+// 组件挂载时预加载所有 GIF，避免切换 Tab 时出现加载延迟
+const GIF_URLS = [
+  "/images/智能简历分析2.gif",
+  "/images/模拟面试场景2.gif",
+  "/images/面试题详解2.gif",
+  "/images/面试评估报告2.gif",
+  "/images/RAG-MCP-Tools2.gif",
+  "/images/基础语音对话2.gif",
+  "/images/端到端电话面试2.gif",
+  "/images/数字人视频面试2.gif",
+];
 
 const demos = [
   {
     key: "resume",
     icon: FileText,
     label: "简历智能分析",
-    description: "上传简历，AI 自动分析并提供优化建议",
-    image: "/images/1-resume-opt.gif",
+    description: "可上传PDF简历，AI 自动分析并提供优化建议",
+    image: "/images/智能简历分析2.gif",
     isPlaceholder: false,
   },
   {
@@ -34,56 +44,58 @@ const demos = [
     icon: MessageSquare,
     label: "模拟面试场景",
     description: "真实面试对话，实时反馈和评分",
-    image: "/images/2-mock-interview.gif",
+    image: "/images/模拟面试场景2.gif",
     isPlaceholder: false,
   },
   {
     key: "qa",
     icon: Code,
     label: "面试题详解",
-    description: "前端经典面试题目，详细解答和思路分析",
-    image: "/images/3-q-a.gif",
+    description: "经典面试题目，详细解答和思路分析",
+    image: "/images/面试题详解2.gif",
     isPlaceholder: false,
   },
   {
     key: "evaluation",
     icon: BarChart3,
     label: "面试评估报告",
-    description: "五维度结构化评分 + 详细反馈，评估结果持久化",
-    image: "",
-    isPlaceholder: true,
+    description: "多维度结构化评分 + 详细反馈，评估结果持久化",
+    image: "/images/面试评估报告2.gif",
+    isPlaceholder: false,
   },
   {
     key: "rag",
     icon: Database,
-    label: "RAG 知识库引用",
-    description: "RAG 检索知识库，引用溯源展示参考文档",
-    image: "",
-    isPlaceholder: true,
+    label: "RAG/MCP/Tools",
+    description:
+      "RAG 知识库检索引用溯源，MCP 协议集成，联网搜索 / GitHub 分析 / 网页抓取 应聘者提供的个人数字信息",
+    image: "/images/RAG-MCP-Tools2.gif",
+    isPlaceholder: false,
   },
   {
     key: "voice",
     icon: Mic,
-    label: "语音面试模式",
-    description: "双向流式 TTS + 实时 ASR，语音对话面试",
-    image: "",
-    isPlaceholder: true,
+    label: "基础语音对话",
+    description: "双向流式 TTS + 实时 ASR，低延迟语音对话面试",
+    image: "/images/基础语音对话2.gif",
+    isPlaceholder: false,
   },
   {
     key: "phone",
     icon: Phone,
-    label: "实时电话面试",
-    description: "豆包端到端语音大模型，真实通话体验",
-    image: "",
-    isPlaceholder: true,
+    label: "端到端电话面试",
+    description: "个性化人设注入，端到端实时语音大模型，真实通话体验",
+    image: "/images/端到端电话面试2.gif",
+    isPlaceholder: false,
   },
   {
     key: "avatar",
     icon: Video,
-    label: "3D 数字人面试",
-    description: "阿里云 3D 数字人 + VAD 免按钮视频面试",
-    image: "",
-    isPlaceholder: true,
+    label: "数字人视频面试",
+    description:
+      "数字人效果演示为廉价模型，实际可接入高级模型提供更真实体验  |  VAD 免按钮视频面试",
+    image: "/images/数字人视频面试2.gif",
+    isPlaceholder: false,
   },
 ];
 
@@ -98,6 +110,14 @@ export function DemoSection() {
     width: 0,
     height: 0,
   });
+
+  // 预加载所有 GIF 到浏览器缓存
+  useEffect(() => {
+    for (const url of GIF_URLS) {
+      const img = new Image();
+      img.src = url;
+    }
+  }, []);
 
   // 同步 Carousel 滑动 → Tab
   const onCarouselSelect = useCallback(() => {
@@ -184,6 +204,11 @@ export function DemoSection() {
           ))}
         </div>
       </div>
+
+      {/* 当前选中功能的描述 */}
+      <p className="text-center text-muted-foreground text-sm transition-all duration-300">
+        {demos[active].description}
+      </p>
 
       {/* GIF 轮播区域 - 毛玻璃边框 + 左右滑动 */}
       <div className="glass-card overflow-hidden rounded-2xl p-2 sm:p-3">

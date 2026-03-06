@@ -75,7 +75,16 @@ export function NewChatDropdown({
 
   return (
     <>
-      <DropdownMenu onOpenChange={setOpen} open={open}>
+      <DropdownMenu
+        onOpenChange={(isOpen) => {
+          setOpen(isOpen);
+          // Radix 关闭菜单后会自动 refocus trigger，延迟 blur 以取消选中态
+          if (!isOpen) {
+            setTimeout(() => triggerRef.current?.blur(), 0);
+          }
+        }}
+        open={open}
+      >
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
