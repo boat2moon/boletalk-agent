@@ -28,6 +28,7 @@ resources:
         - run: echo "FISH_AUDIO_API_KEY=${env(FISH_AUDIO_API_KEY)}" >> .env.local
         - run: echo "GROQ_API_KEY=${env(GROQ_API_KEY)}" >> .env.local
         - run: echo "AUTH_SECRET=${env(AUTH_SECRET)}" >> .env.local
+        - run: echo "AUTH_TRUST_HOST=true" >> .env.local
         - run: echo "AUTH_GITHUB_ID=${env(AUTH_GITHUB_ID)}" >> .env.local
         - run: echo "AUTH_GITHUB_SECRET=${env(AUTH_GITHUB_SECRET)}" >> .env.local
         - run: echo "EMAIL_HOST=${env(EMAIL_HOST)}" >> .env.local
@@ -87,6 +88,7 @@ resources:
         FISH_AUDIO_API_KEY: ${env(FISH_AUDIO_API_KEY)}
         GROQ_API_KEY: ${env(GROQ_API_KEY)}
         AUTH_SECRET: ${env(AUTH_SECRET)}
+        AUTH_TRUST_HOST: "true"
         AUTH_GITHUB_ID: ${env(AUTH_GITHUB_ID)}
         AUTH_GITHUB_SECRET: ${env(AUTH_GITHUB_SECRET)}
         EMAIL_HOST: ${env(EMAIL_HOST)}
