@@ -171,7 +171,10 @@ export function DemoSection() {
     <div className="mx-auto max-w-4xl space-y-8">
       {/* Tab 导航栏 - 两行四列 + 自由滑动指示器 */}
       <div className="glass-card mx-auto max-w-2xl rounded-2xl p-2">
-        <div className="relative grid grid-cols-4 gap-1" ref={gridRef}>
+        <div
+          className="relative grid grid-cols-2 gap-1 sm:grid-cols-4"
+          ref={gridRef}
+        >
           {/* 自由滑动背景指示器 */}
           <div
             className="pointer-events-none absolute rounded-xl bg-foreground shadow-lg"
@@ -186,7 +189,7 @@ export function DemoSection() {
           />
           {demos.map((demo, i) => (
             <button
-              className={`relative z-1 inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 font-medium text-xs transition-colors duration-300 ${
+              className={`relative z-1 inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-xl px-2 py-2 font-medium text-xs transition-colors duration-300 sm:px-3 sm:py-2.5 ${
                 active === i
                   ? "text-background"
                   : "hover:bg-white/30 dark:hover:bg-white/10"
