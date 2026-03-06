@@ -97,8 +97,8 @@ export function SidebarUserNav({ user }: { user: User }) {
                   if (isGuest) {
                     router.push("/login");
                   } else {
-                    signOut({
-                      redirectTo: "/",
+                    signOut({ redirect: false }).then(() => {
+                      window.location.href = "/";
                     });
                   }
                 }}
@@ -154,8 +154,8 @@ export function SidebarUserNav({ user }: { user: User }) {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                signOut({
-                  redirectTo: "/",
+                signOut({ redirect: false }).then(() => {
+                  window.location.href = "/";
                 });
               }}
             >

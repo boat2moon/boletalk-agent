@@ -115,8 +115,8 @@ export function HeaderUserNav() {
                 if (isGuest) {
                   router.push("/login");
                 } else {
-                  signOut({
-                    redirectTo: "/",
+                  signOut({ redirect: false }).then(() => {
+                    window.location.href = "/";
                   });
                 }
               }}
@@ -171,8 +171,8 @@ export function HeaderUserNav() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                signOut({
-                  redirectTo: "/",
+                signOut({ redirect: false }).then(() => {
+                  window.location.href = "/";
                 });
               }}
             >
