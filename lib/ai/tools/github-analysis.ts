@@ -1,41 +1,91 @@
 /**
- * GitHub 代码分析工具（共享工具/MCP 层）
+ * GitHub 代码分析工具（共享工具层）
  *
- * 通过 GitHub MCP Server 拉取候选人的开源项目信息，
- * 然后使用 LLM 进行代码风格和项目质量分析。
+ * 拉取候选人的 GitHub 开源项目信息，使用 LLM 进行代码风格和项目质量分析。
  *
- * 使用场景：
- * - 面试中 Agent 按需分析候选人的 GitHub 项目
- * - 评价代码风格、项目活跃度、技术栈深度
- * - 生成针对性面试问题
- *
- * 数据流：
- *   Agent 调用 githubAnalysis Tool
- *   → MCP Client 连接 GitHub MCP Server
- *   → 拉取仓库列表 / 文件内容
- *   → LLM 分析代码质量
- *   → 返回结构化评价
+ * ═══════════════════════════════════════════════════════════
+ * 环境适配说明：
+ * - 【当前】直接 API 调用：使用 GitHub REST API（Node fetch），适用于所有环境
+ * - 【备选】MCP 版本（已注释）：通过 GitHub MCP Server（stdio transport）调用，
+ *    仅适用于长期运行的 Node.js 服务（本地开发、Docker 部署等），
+ *    不适用于 Serverless 环境（FC/Lambda），因为 stdio 子进程会被冻结/回收。
+ * ═══════════════════════════════════════════════════════════
  */
 
 import { generateObject, tool } from "ai";
 import { z } from "zod";
-import { getGitHubMCPClient } from "@/lib/ai/mcp/mcp-clients";
 import { myProvider } from "@/lib/ai/providers";
+
+// ─── MCP 版本（仅适用于本地开发 / 长期运行的 Node.js 服务） ─────────
+// import { getGitHubMCPClient } from "@/lib/ai/mcp/mcp-clients";
+//
+// async function callGitHubTool_MCP(
+//   toolName: string,
+//   args: Record<string, unknown>
+// ): Promise<string> {
+//   const client = await getGitHubMCPClient();
+//   const tools = await client.tools();
+//   const targetTool = tools[toolName];
+//   if (!targetTool) throw new Error(`GitHub MCP Server 未提供工具: ${toolName}`);
+//   const result = await targetTool.execute(args, {
+//     messages: [],
+//     toolCallId: `github-${toolName}-${Date.now()}`,
+//   });
+//   return typeof result === "string" ? result : JSON.stringify(result);
+// }
+
+// ─── 直接 API 版本（适用于所有环境，包括 Serverless FC） ─────────
+
+const GITHUB_API = "https://api.github.com";
+
+/**
+ * 调用 GitHub REST API
+ */
+async function callGitHubAPI(
+  path: string,
+  params?: Record<string, string>
+): Promise<string> {
+  const token = process.env.GITHUB_TOKEN;
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": "BoleTalk/1.0",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const url = new URL(`${GITHUB_API}${path}`);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      url.searchParams.set(k, v);
+    }
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  const res = await fetch(url.toString(), {
+    headers,
+    signal: controller.signal,
+  });
+
+  clearTimeout(timeout);
+
+  if (!res.ok) {
+    throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
+  }
+
+  return res.text();
+}
 
 // ─── 分析结果 Schema ──────────────────────────────────
 
 const githubAnalysisSchema = z.object({
-  /** 候选人 GitHub 总体评价 */
   overview: z.string().describe("候选人 GitHub 整体印象概述"),
-  /** 代码风格评分 1-10 */
   codeStyleScore: z.number().describe("代码风格评分 1-10"),
-  /** 项目质量评分 1-10 */
   projectQualityScore: z.number().describe("项目质量评分 1-10"),
-  /** 活跃度评分 1-10 */
   activityScore: z.number().describe("开源活跃度评分 1-10"),
-  /** 技术栈分析 */
   techStackAnalysis: z.string().describe("主要技术栈分析"),
-  /** 亮点项目 */
   highlightProjects: z
     .array(
       z.object({
@@ -45,7 +95,6 @@ const githubAnalysisSchema = z.object({
       })
     )
     .describe("值得关注的亮点项目，最多 3 个"),
-  /** 建议的面试追问方向 */
   suggestedQuestions: z
     .array(z.string())
     .describe("基于代码分析的建议面试追问方向，3-5 条"),
@@ -53,36 +102,8 @@ const githubAnalysisSchema = z.object({
 
 export type GitHubAnalysisResult = z.infer<typeof githubAnalysisSchema>;
 
-// ─── MCP 工具调用辅助 ─────────────────────────────────
-
-/**
- * 通过 MCP 调用 GitHub Server 的指定工具
- */
-async function callGitHubTool(
-  toolName: string,
-  args: Record<string, unknown>
-): Promise<string> {
-  const client = await getGitHubMCPClient();
-  const tools = await client.tools();
-
-  const targetTool = tools[toolName];
-  if (!targetTool) {
-    throw new Error(`GitHub MCP Server 未提供工具: ${toolName}`);
-  }
-
-  // 通过 tool 的 execute 调用 MCP Server
-  const result = await targetTool.execute(args, {
-    messages: [],
-    toolCallId: `github-${toolName}-${Date.now()}`,
-  });
-  return typeof result === "string" ? result : JSON.stringify(result);
-}
-
 // ─── 核心分析函数 ──────────────────────────────────────
 
-/**
- * 拉取并分析候选人的 GitHub 项目
- */
 async function analyzeGitHubProfile(
   githubUsername: string,
   repoName?: string
@@ -91,50 +112,57 @@ async function analyzeGitHubProfile(
 
   try {
     // 1. 搜索用户的仓库
-    const reposData = await callGitHubTool("search_repositories", {
-      query: repoName
+    const reposData = await callGitHubAPI("/search/repositories", {
+      q: repoName
         ? `user:${githubUsername} ${repoName}`
         : `user:${githubUsername}`,
+      sort: "updated",
+      per_page: "10",
     });
     dataPoints.push(`## 仓库列表\n${reposData}`);
   } catch (err) {
-    console.error("[GitHub MCP] 搜索仓库失败:", err);
+    console.error("[GitHub] 搜索仓库失败:", err);
     dataPoints.push("## 仓库列表\n（搜索失败）");
   }
 
   // 如果指定了仓库，拉取更详细的信息
   if (repoName) {
     try {
-      // 尝试获取 README
-      const readmeData = await callGitHubTool("get_file_contents", {
-        owner: githubUsername,
-        repo: repoName,
-        path: "README.md",
-      });
-      dataPoints.push(`## README.md\n${readmeData}`);
+      const readmeRes = await callGitHubAPI(
+        `/repos/${githubUsername}/${repoName}/readme`
+      );
+      const readmeJson = JSON.parse(readmeRes) as { content?: string };
+      if (readmeJson.content) {
+        const decoded = Buffer.from(readmeJson.content, "base64").toString(
+          "utf-8"
+        );
+        dataPoints.push(`## README.md\n${decoded.slice(0, 3000)}`);
+      }
     } catch {
       // README 可能不存在，忽略
     }
 
     try {
-      // 获取最近的提交
-      const commitsData = await callGitHubTool("list_commits", {
-        owner: githubUsername,
-        repo: repoName,
-      });
-      dataPoints.push(`## 最近提交\n${commitsData}`);
+      const commitsData = await callGitHubAPI(
+        `/repos/${githubUsername}/${repoName}/commits`,
+        { per_page: "10" }
+      );
+      dataPoints.push(`## 最近提交\n${commitsData.slice(0, 3000)}`);
     } catch {
       // 忽略
     }
 
     try {
-      // 获取 package.json（如果存在）来分析技术栈
-      const pkgData = await callGitHubTool("get_file_contents", {
-        owner: githubUsername,
-        repo: repoName,
-        path: "package.json",
-      });
-      dataPoints.push(`## package.json\n${pkgData}`);
+      const pkgRes = await callGitHubAPI(
+        `/repos/${githubUsername}/${repoName}/contents/package.json`
+      );
+      const pkgJson = JSON.parse(pkgRes) as { content?: string };
+      if (pkgJson.content) {
+        const decoded = Buffer.from(pkgJson.content, "base64").toString(
+          "utf-8"
+        );
+        dataPoints.push(`## package.json\n${decoded}`);
+      }
     } catch {
       // 可能不是 JS 项目，忽略
     }
@@ -170,12 +198,6 @@ ${dataPoints.join("\n\n---\n\n")}
 
 // ─── Agent Tool 定义 ─────────────────────────────────
 
-/**
- * GitHub 代码分析 Tool
- *
- * 面试 Agent 可在对话中调用此工具，分析候选人的 GitHub 开源项目。
- * 结果会作为会话上下文的一部分，在评估时自动写入记忆系统。
- */
 export const githubAnalysisTool = tool({
   description:
     "分析候选人的 GitHub 开源项目，评价代码风格和项目质量。当候选人提到 GitHub 用户名或仓库链接时使用此工具。",
@@ -189,16 +211,15 @@ export const githubAnalysisTool = tool({
   execute: async ({ githubUsername, repoName }) => {
     try {
       console.log(
-        `[GitHub MCP] 开始分析: ${githubUsername}${repoName ? `/${repoName}` : ""}`
+        `[GitHub] 开始分析: ${githubUsername}${repoName ? `/${repoName}` : ""}`
       );
 
       const analysis = await analyzeGitHubProfile(githubUsername, repoName);
 
       console.log(
-        `[GitHub MCP] 分析完成: 代码风格=${analysis.codeStyleScore}, 项目质量=${analysis.projectQualityScore}`
+        `[GitHub] 分析完成: 代码风格=${analysis.codeStyleScore}, 项目质量=${analysis.projectQualityScore}`
       );
 
-      // 格式化为面试官可引用的文本
       const formattedResult = `
 【GitHub 项目分析结果 - ${githubUsername}${repoName ? `/${repoName}` : ""}】
 
@@ -221,7 +242,7 @@ ${analysis.suggestedQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}
       return formattedResult;
     } catch (error) {
       const message = error instanceof Error ? error.message : "未知错误";
-      console.error("[GitHub MCP] 分析失败:", message);
+      console.error("[GitHub] 分析失败:", message);
       return `GitHub 分析失败: ${message}。可以稍后重试，或者请候选人直接介绍他们的项目。`;
     }
   },

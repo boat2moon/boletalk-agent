@@ -5,6 +5,15 @@
  * - GitHub / Fetch：通过 stdio transport 启动本地 MCP Server 子进程
  * - Tavily：通过 HTTP transport 连接远端 MCP Server
  *
+ * ═══════════════════════════════════════════════════════════
+ * 注意：本模块仅适用于本地开发 / 长期运行的 Node.js 服务。
+ * 在 Serverless 环境（阿里云 FC / AWS Lambda 等）中，
+ * stdio transport 的子进程会被冻结/回收，导致 MCP 连接失败。
+ *
+ * 当前各工具 execute 已改为直接 API 调用（无需本模块），
+ * 但保留本模块代码以便未来在本地开发环境切回 MCP 模式。
+ * ═══════════════════════════════════════════════════════════
+ *
  * 当前接入的 MCP Server：
  * - GitHub MCP：拉取候选人开源项目、评价代码质量
  * - Tavily MCP：搜索候选人技术博客 / 社区贡献

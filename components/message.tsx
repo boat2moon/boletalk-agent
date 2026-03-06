@@ -371,6 +371,70 @@ const PurePreviewMessage = ({
               );
             }
 
+            // ─── 通用工具调用卡片：所有未单独处理的 tool-* 类型 ───
+            if (typeof type === "string" && type.startsWith("tool-")) {
+              const { toolCallId, state } = part as {
+                toolCallId: string;
+                state:
+                  | "input-streaming"
+                  | "input-available"
+                  | "output-available"
+                  | "output-error";
+              };
+              const toolName = type.replace("tool-", "");
+
+              // 工具名 → 用户可读标题和图标
+              const TOOL_LABELS: Record<
+                string,
+                { icon: string; label: string; queryKey?: string }
+              > = {
+                githubAnalysis: {
+                  icon: "🐙",
+                  label: "GitHub 分析",
+                  queryKey: "githubUsername",
+                },
+                webSearch: {
+                  icon: "🌐",
+                  label: "网页搜索",
+                  queryKey: "query",
+                },
+                fetchUrl: {
+                  icon: "🔗",
+                  label: "URL 抓取",
+                  queryKey: "url",
+                },
+                memoryRead: {
+                  icon: "🧠",
+                  label: "记忆检索",
+                  queryKey: "query",
+                },
+              };
+
+              const info = TOOL_LABELS[toolName] ?? {
+                icon: "🔧",
+                label: toolName,
+              };
+              const inputObj =
+                "input" in part
+                  ? (part.input as Record<string, unknown>)
+                  : undefined;
+              const queryValue = info.queryKey
+                ? (inputObj?.[info.queryKey] as string)
+                : undefined;
+              const displayLabel = queryValue
+                ? `${info.icon} ${info.label}: ${queryValue}`
+                : `${info.icon} ${info.label}`;
+
+              return (
+                <Tool defaultOpen={false} key={toolCallId}>
+                  <ToolHeader
+                    state={state}
+                    type={displayLabel as `tool-${string}`}
+                  />
+                </Tool>
+              );
+            }
+
             return null;
           })}
 
