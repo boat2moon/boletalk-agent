@@ -39,6 +39,16 @@ export const entitlementsByUserType: Record<UserType, Entitlements> = {
   },
 
   /*
+   * VIP 用户
+   * API 调用次数大幅提升（99次/天）
+   */
+  vip: {
+    maxMessagesPerDay: 500,
+    maxChatApiCallsPerDay: 99,
+    availableChatModelIds: ["chat-model", "chat-model-glm"],
+  },
+
+  /*
    * TODO: For users with an account and a paid membership
    */
 };

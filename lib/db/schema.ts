@@ -21,6 +21,7 @@ export const user = pgTable("User", {
   name: varchar("name", { length: 100 }),
   emailVerified: timestamp("emailVerified"),
   image: text("image"),
+  type: varchar("type", { length: 20 }).notNull().default("regular"),
 });
 
 export type User = InferSelectModel<typeof user>;
