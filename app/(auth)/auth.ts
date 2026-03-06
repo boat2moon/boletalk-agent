@@ -1,13 +1,13 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { compare } from "bcrypt-ts";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { headers } from "next/headers";
 import NextAuth, { type DefaultSession } from "next-auth";
 import type { DefaultJWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 import Email from "next-auth/providers/nodemailer";
 import { createTransport } from "nodemailer";
-import { headers } from "next/headers";
 
 import postgres from "postgres";
 import { DUMMY_PASSWORD } from "@/lib/constants";
@@ -23,7 +23,7 @@ import {
 } from "@/lib/db/schema";
 import { authConfig } from "./auth.config";
 
-export type UserType = "guest" | "regular";
+export type UserType = "guest" | "regular" | "vip";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -79,15 +79,16 @@ async function sendVerificationRequest(params: any) {
 
   try {
     const nextHeaders = await headers();
-    let actualHost = nextHeaders.get("x-forwarded-host") || nextHeaders.get("host") || "";
+    let actualHost =
+      nextHeaders.get("x-forwarded-host") || nextHeaders.get("host") || "";
     let actualProto = nextHeaders.get("x-forwarded-proto") || "https";
 
-    // 发现代理把 host 变成了容器内部IP（如 0.0.0.0）
-    if (actualHost.includes("0.0.0") || actualHost.includes("127.0.0") || actualHost.includes("localhost")) {
+    // 仅在阿里云 FC 容器内部（Host 为 0.0.0.0）时才修正域名
+    if (actualHost.includes("0.0.0")) {
+      const fcDomain = nextHeaders.get("x-fc-custom-domain"); // 阿里云 FC 自定义域名头
       const referer = nextHeaders.get("referer");
       const origin = nextHeaders.get("origin");
-      const fcDomain = nextHeaders.get("x-fc-custom-domain"); // 阿里云 FC 自定义域名头
-      
+
       const sourceUrl = referer || origin;
       if (fcDomain) {
         actualHost = fcDomain;
@@ -100,19 +101,23 @@ async function sendVerificationRequest(params: any) {
       }
     }
 
-    if (actualHost && !actualHost.includes("0.0.0") && !actualHost.includes("127.0.0") && !actualHost.includes("localhost")) {
+    if (actualHost && !actualHost.includes("0.0.0")) {
       const parsedUrl = new URL(url);
       parsedUrl.hostname = actualHost;
-      parsedUrl.port = "";
+      if (!actualHost.includes("localhost") && !actualHost.includes("127.0.0.1")) {
+        parsedUrl.port = "";
+      }
       parsedUrl.protocol = actualProto;
-      
+
       const callbackUrl = parsedUrl.searchParams.get("callbackUrl");
       if (callbackUrl) {
         try {
           const parsedCb = new URL(callbackUrl);
-          if (parsedCb.host.includes("0.0.0") || parsedCb.host.includes("127.0.0") || parsedCb.host.includes("localhost")) {
+          if (parsedCb.host.includes("0.0.0")) {
             parsedCb.hostname = actualHost;
-            parsedCb.port = "";
+            if (!actualHost.includes("localhost") && !actualHost.includes("127.0.0.1")) {
+              parsedCb.port = "";
+            }
             parsedCb.protocol = actualProto;
             parsedUrl.searchParams.set("callbackUrl", parsedCb.toString());
           }
@@ -164,7 +169,9 @@ async function sendVerificationRequest(params: any) {
 `,
   });
 
-  const failed = result.rejected.concat((result as any).pending || []).filter(Boolean);
+  const failed = result.rejected
+    .concat((result as any).pending || [])
+    .filter(Boolean);
   if (failed.length) {
     throw new Error(`Email(s) (${failed.join(", ")}) could not be sent`);
   }
@@ -240,12 +247,19 @@ export const {
       cleanupExpiredGuests().catch(() => {});
       return true;
     },
-    jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id as string;
         token.email = user.email;
-        // Credentials 登录会带 type，OAuth/MagicLink 默认为 regular
-        token.type = user.type || "regular";
+        // guest 登录会带 type="guest"，直接使用
+        if (user.type === "guest") {
+          token.type = "guest";
+        } else {
+          // 非 guest 用户：从数据库读取 type（支持 vip 等自定义类型）
+          const dbUsers = await getUser(user.email as string);
+          const dbType = dbUsers[0]?.type as UserType | undefined;
+          token.type = dbType || "regular";
+        }
       }
       // OAuth/MagicLink 首次登录时，adapter 已创建用户，
       // 但 user.type 可能不存在，确保默认为 regular
@@ -262,47 +276,46 @@ export const {
       return session;
     },
     async redirect({ url, baseUrl }) {
-      // 解决阿里云 FC 内部 Host 变成 0.0.0.0 的问题
+      // 仅修正阿里云 FC 内部 0.0.0.0 地址，不影响 localhost 本地开发
+      // 注意：不能用 referer/origin fallback，因为点击邮件链接时 referer 是邮件客户端域名
       try {
         const nextHeaders = await headers();
-        let actualHost = nextHeaders.get("x-fc-custom-domain") || nextHeaders.get("x-forwarded-host") || nextHeaders.get("host") || "";
-        let actualProto = nextHeaders.get("x-forwarded-proto") || "https";
+        const actualHost =
+          nextHeaders.get("x-fc-custom-domain") ||
+          nextHeaders.get("x-forwarded-host") ||
+          nextHeaders.get("host") ||
+          "";
+        const actualProto =
+          nextHeaders.get("x-forwarded-proto") || "https";
 
-        if (!actualHost || actualHost.includes("0.0.0") || actualHost.includes("127.0.0") || actualHost.includes("localhost")) {
-           const referer = nextHeaders.get("referer");
-           const origin = nextHeaders.get("origin");
-           const sourceUrl = referer || origin;
-           if (sourceUrl) {
-              try {
-                const parsed = new URL(sourceUrl);
-                actualHost = parsed.hostname;
-                actualProto = parsed.protocol.replace(":", "");
-              } catch {}
-           }
+        // 只有当 host 是 0.0.0.0 且有 FC 自定义域名或有效的 forwarded-host 时才替换
+        const isFCInternal = actualHost.includes("0.0.0");
+        if (isFCInternal) {
+          // 在 FC 环境但无法拿到真实域名，直接返回相对路径
+          return url.startsWith("/") ? url : new URL(url).pathname;
         }
-        
-        const isBadHost = (h: string) => h.includes("0.0.0") || h.includes("127.0.0") || h.includes("localhost");
-        
+
+        // 非 FC 内部环境（含本地开发），检查 url 中是否包含 0.0.0.0 需要修正
         let finalUrl = url;
         if (url.startsWith("/")) {
-          if (actualHost && !isBadHost(actualHost)) {
-             finalUrl = `${actualProto}://${actualHost}${url}`;
-          } else if (!isBadHost(new URL(baseUrl).hostname)) {
-             finalUrl = `${baseUrl}${url}`;
-          }
+          finalUrl = `${baseUrl}${url}`;
         } else {
-           try {
-             const parsedUrl = new URL(url);
-             if (isBadHost(parsedUrl.hostname) && actualHost && !isBadHost(actualHost)) {
-                parsedUrl.hostname = actualHost;
+          try {
+            const parsedUrl = new URL(url);
+            if (parsedUrl.hostname.includes("0.0.0")) {
+              parsedUrl.hostname =
+                actualHost.split(":")[0] ||
+                new URL(baseUrl).hostname;
+              if (!actualHost.includes("localhost") && !actualHost.includes("127.0.0.1") && !baseUrl.includes("localhost")) {
                 parsedUrl.port = "";
-                parsedUrl.protocol = actualProto;
-                finalUrl = parsedUrl.toString();
-             }
-           } catch {}
+              }
+              parsedUrl.protocol = actualProto;
+              finalUrl = parsedUrl.toString();
+            }
+          } catch {}
         }
         return finalUrl;
-      } catch (err) {
+      } catch {
         return url.startsWith("/") ? `${baseUrl}${url}` : url;
       }
     },
