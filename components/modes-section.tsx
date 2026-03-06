@@ -8,7 +8,7 @@ import {
   Phone,
   Video,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const modes = [
   {
@@ -29,7 +29,7 @@ const modes = [
       "JD 模板注入定制面试",
       "MCP 工具：GitHub 分析 / 联网搜索 / 网页抓取",
     ],
-    image: "/images/placeholder-text.svg",
+    image: "/images/RAG-MCP-Tools2.gif",
   },
   {
     key: "voice",
@@ -49,7 +49,7 @@ const modes = [
       "文本流延迟释放实现音画同步",
       "全局 Provider 音频缓存零延迟重播",
     ],
-    image: "/images/placeholder-voice.svg",
+    image: "/images/基础语音对话2.gif",
   },
   {
     key: "phone",
@@ -69,7 +69,7 @@ const modes = [
       "JWT 鉴权 + Web Crypto API",
       "支持简历上传 + JD 模板选择",
     ],
-    image: "/images/placeholder-phone.svg",
+    image: "/images/端到端电话面试2.gif",
   },
   {
     key: "avatar",
@@ -82,20 +82,30 @@ const modes = [
     description:
       "阿里云 3D 数字人 + 浏览器端 Silero VAD 语音检测 + 流式 ASR，免按钮实时视频面试体验。",
     features: [
-      "阿里云 3D 数字人播报模式",
+      "3D 数字人流媒体播报模式",
       "Silero VAD 浏览器端 ONNX 推理",
       "免按钮自动轮次判定",
       "逐句发送延迟优化（5s → 1~2s）",
       "打断式半双工支持",
       "WebRTC 实时视频流",
     ],
-    image: "/images/placeholder-avatar.svg",
+    image: "/images/数字人视频面试2.gif",
   },
 ];
 
 export function ModesSection() {
   const [activeMode, setActiveMode] = useState(0);
   const current = modes[activeMode];
+
+  // 预加载所有模式 GIF
+  useEffect(() => {
+    for (const m of modes) {
+      if (m.image && !m.image.includes("placeholder")) {
+        const img = new Image();
+        img.src = m.image;
+      }
+    }
+  }, []);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -157,19 +167,29 @@ export function ModesSection() {
 
           {/* Right: Image/Placeholder */}
           <div className="flex items-center justify-center bg-muted/30 p-6 md:p-10">
-            <div
-              className={`flex aspect-video w-full flex-col items-center justify-center rounded-xl border-2 border-dashed ${current.activeBg} transition-colors duration-300`}
-            >
-              <current.icon
-                className={`mb-3 size-16 ${current.color} opacity-30`}
+            {current.image && !current.image.includes("placeholder") ? (
+              // biome-ignore lint/nursery/useImageSize: GIF images
+              // biome-ignore lint/performance/noImgElement: GIF needs raw img
+              <img
+                alt={current.label}
+                className={`w-full rounded-xl border-2 border-dashed ${current.activeBg} transition-colors duration-300`}
+                src={current.image}
               />
-              <span className="font-medium text-muted-foreground text-sm">
-                {current.label}演示截图 / GIF
-              </span>
-              <span className="mt-1 text-muted-foreground/60 text-xs">
-                后续替换为真实录屏
-              </span>
-            </div>
+            ) : (
+              <div
+                className={`flex aspect-video w-full flex-col items-center justify-center rounded-xl border-2 border-dashed ${current.activeBg} transition-colors duration-300`}
+              >
+                <current.icon
+                  className={`mb-3 size-16 ${current.color} opacity-30`}
+                />
+                <span className="font-medium text-muted-foreground text-sm">
+                  {current.label}演示截图 / GIF
+                </span>
+                <span className="mt-1 text-muted-foreground/60 text-xs">
+                  后续替换为真实录屏
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
