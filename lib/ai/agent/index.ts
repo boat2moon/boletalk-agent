@@ -261,7 +261,7 @@ export function createChatStream({
 
         // biome-ignore lint/performance/useTopLevelRegex: regex used inside stream callback
         const SENTENCE_END = /[。！？!?.;\n]/;
-        const MIN_CHUNK_SIZE = 200;
+        const MIN_CHUNK_SIZE = 400;
 
         // ── 1. 从 textStream 实时拆句，收集到 sentences 数组 ──
         const sentences: string[] = [];

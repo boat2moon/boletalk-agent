@@ -287,41 +287,52 @@ export const {
     },
     async redirect({ url, baseUrl }) {
       // 仅修正阿里云 FC 内部 0.0.0.0 地址，不影响 localhost 本地开发
-      // 注意：不能用 referer/origin fallback，因为点击邮件链接时 referer 是邮件客户端域名
       try {
         const nextHeaders = await headers();
-        const actualHost =
+        let actualHost =
           nextHeaders.get("x-fc-custom-domain") ||
           nextHeaders.get("x-forwarded-host") ||
           nextHeaders.get("host") ||
           "";
-        const actualProto = nextHeaders.get("x-forwarded-proto") || "https";
+        let actualProto = nextHeaders.get("x-forwarded-proto") || "https";
 
-        // 只有当 host 是 0.0.0.0 且有 FC 自定义域名或有效的 forwarded-host 时才替换
-        const isFCInternal = actualHost.includes("0.0.0");
-        if (isFCInternal) {
-          // 在 FC 环境但无法拿到真实域名，直接返回相对路径
+        // FC 环境中 host 可能为 0.0.0.0，尝试从 referer/origin 获取真实域名
+        if (actualHost.includes("0.0.0")) {
+          const referer = nextHeaders.get("referer");
+          const origin = nextHeaders.get("origin");
+          const sourceUrl = referer || origin;
+          if (sourceUrl) {
+            try {
+              const parsed = new URL(sourceUrl);
+              actualHost = parsed.host;
+              actualProto = parsed.protocol.replace(":", "");
+            } catch {
+              // ignore invalid URL
+            }
+          }
+        }
+
+        // 仍然无法解析真实域名，返回相对路径（最后的兜底）
+        if (!actualHost || actualHost.includes("0.0.0")) {
           return url.startsWith("/") ? url : new URL(url).pathname;
         }
 
-        // 非 FC 内部环境（含本地开发），检查 url 中是否包含 0.0.0.0 需要修正
+        // 使用真实域名构造正确的 URL
+        const isLocal =
+          actualHost.includes("localhost") || actualHost.includes("127.0.0.1");
+
         let finalUrl = url;
         if (url.startsWith("/")) {
-          finalUrl = `${baseUrl}${url}`;
+          finalUrl = `${isLocal ? "http" : actualProto}://${actualHost}${url}`;
         } else {
           try {
             const parsedUrl = new URL(url);
             if (parsedUrl.hostname.includes("0.0.0")) {
-              parsedUrl.hostname =
-                actualHost.split(":")[0] || new URL(baseUrl).hostname;
-              if (
-                !actualHost.includes("localhost") &&
-                !actualHost.includes("127.0.0.1") &&
-                !baseUrl.includes("localhost")
-              ) {
+              parsedUrl.hostname = actualHost.split(":")[0];
+              if (!isLocal) {
                 parsedUrl.port = "";
               }
-              parsedUrl.protocol = actualProto;
+              parsedUrl.protocol = isLocal ? "http" : actualProto;
               finalUrl = parsedUrl.toString();
             }
           } catch {
