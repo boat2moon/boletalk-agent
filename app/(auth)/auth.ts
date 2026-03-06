@@ -94,7 +94,7 @@ async function sendVerificationRequest(params: any) {
       } else if (sourceUrl) {
         try {
           const parsed = new URL(sourceUrl);
-          actualHost = parsed.host;
+          actualHost = parsed.hostname;
           actualProto = parsed.protocol.replace(":", "");
         } catch {}
       }
@@ -102,7 +102,8 @@ async function sendVerificationRequest(params: any) {
 
     if (actualHost && !actualHost.includes("0.0.0") && !actualHost.includes("127.0.0") && !actualHost.includes("localhost")) {
       const parsedUrl = new URL(url);
-      parsedUrl.host = actualHost;
+      parsedUrl.hostname = actualHost;
+      parsedUrl.port = "";
       parsedUrl.protocol = actualProto;
       
       const callbackUrl = parsedUrl.searchParams.get("callbackUrl");
@@ -110,7 +111,8 @@ async function sendVerificationRequest(params: any) {
         try {
           const parsedCb = new URL(callbackUrl);
           if (parsedCb.host.includes("0.0.0") || parsedCb.host.includes("127.0.0") || parsedCb.host.includes("localhost")) {
-            parsedCb.host = actualHost;
+            parsedCb.hostname = actualHost;
+            parsedCb.port = "";
             parsedCb.protocol = actualProto;
             parsedUrl.searchParams.set("callbackUrl", parsedCb.toString());
           }
