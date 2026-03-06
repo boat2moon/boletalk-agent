@@ -53,10 +53,17 @@ function PureMessages({
           {messages.length === 0 && <Greeting />}
 
           {(() => {
-            const filteredMessages = messages.filter((message) => {
+            const filteredMessages = messages.filter((message, idx) => {
               // 过滤掉因为接收到早期 stream data（如 data-chat-title、data-usage）
               // 而意外创建的空 assistant 消息
               if (message.role === "assistant") {
+                // streaming 期间保留最后一条 assistant 消息，
+                // 即使暂无可渲染内容，让 PreviewMessage 内部显示"思考中"占位，
+                // 避免 ThinkingMessage -> PreviewMessage 的 DOM 切换导致 CLS 闪烁
+                if (status === "streaming" && idx === messages.length - 1) {
+                  return true;
+                }
+
                 const hasRenderableContent = message.parts?.some((part) => {
                   // 有实际文本内容
                   if (part.type === "text") {
@@ -107,11 +114,7 @@ function PureMessages({
                   />
                 ))}
 
-                {(status === "submitted" ||
-                  (status === "streaming" &&
-                    filteredMessages.at(-1)?.role !== "assistant")) && (
-                  <ThinkingMessage />
-                )}
+                {status === "submitted" && <ThinkingMessage />}
               </>
             );
           })()}

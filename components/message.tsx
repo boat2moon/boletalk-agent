@@ -374,6 +374,25 @@ const PurePreviewMessage = ({
             return null;
           })}
 
+          {/* streaming 期间消息暂无可渲染内容时，显示"思考中"占位 */}
+          {isLoading &&
+            message.role === "assistant" &&
+            !message.parts?.some(
+              (p) =>
+                (p.type === "text" && p.text.length > 0) ||
+                (p.type === "reasoning" && (p.text?.length ?? 0) > 0) ||
+                (typeof p.type === "string" && p.type.startsWith("tool-"))
+            ) && (
+              <div className="flex items-center gap-1.5 p-0 text-muted-foreground text-sm">
+                <span className="animate-pulse">思考中</span>
+                <span className="inline-flex gap-0.5">
+                  <span className="inline-block size-[5px] animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:0ms]" />
+                  <span className="inline-block size-[5px] animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:150ms]" />
+                  <span className="inline-block size-[5px] animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:300ms]" />
+                </span>
+              </div>
+            )}
+
           {providerLabel && (
             <div
               className={cn(
