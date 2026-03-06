@@ -6,6 +6,8 @@ import type { DefaultJWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 import Email from "next-auth/providers/nodemailer";
+import { createTransport } from "nodemailer";
+import { headers } from "next/headers";
 
 import postgres from "postgres";
 import { DUMMY_PASSWORD } from "@/lib/constants";
@@ -65,6 +67,107 @@ function genEmailSmtpServer() {
   return `${protocol}://${username}:${password}@${host}:${port}`;
 }
 
+/**
+ * 自定义发送 Magic Link 逻辑
+ * 解决部署在阿里云 FC 等 Serverless 环境中，
+ * Host 请求头被重写为 0.0.0.0:3000 的问题，支持多域名场景。
+ */
+async function sendVerificationRequest(params: any) {
+  const { identifier, url, provider, theme } = params;
+  let finalUrl = url;
+  let finalHost = new URL(url).host;
+
+  try {
+    const nextHeaders = await headers();
+    let actualHost = nextHeaders.get("x-forwarded-host") || nextHeaders.get("host") || "";
+    let actualProto = nextHeaders.get("x-forwarded-proto") || "https";
+
+    // 发现代理把 host 变成了容器内部IP（如 0.0.0.0）
+    if (actualHost.includes("0.0.0") || actualHost.includes("127.0.0") || actualHost.includes("localhost")) {
+      const referer = nextHeaders.get("referer");
+      const origin = nextHeaders.get("origin");
+      const fcDomain = nextHeaders.get("x-fc-custom-domain"); // 阿里云 FC 自定义域名头
+      
+      const sourceUrl = referer || origin;
+      if (fcDomain) {
+        actualHost = fcDomain;
+      } else if (sourceUrl) {
+        try {
+          const parsed = new URL(sourceUrl);
+          actualHost = parsed.host;
+          actualProto = parsed.protocol.replace(":", "");
+        } catch {}
+      }
+    }
+
+    if (actualHost && !actualHost.includes("0.0.0") && !actualHost.includes("127.0.0") && !actualHost.includes("localhost")) {
+      const parsedUrl = new URL(url);
+      parsedUrl.host = actualHost;
+      parsedUrl.protocol = actualProto;
+      
+      const callbackUrl = parsedUrl.searchParams.get("callbackUrl");
+      if (callbackUrl) {
+        try {
+          const parsedCb = new URL(callbackUrl);
+          if (parsedCb.host.includes("0.0.0") || parsedCb.host.includes("127.0.0") || parsedCb.host.includes("localhost")) {
+            parsedCb.host = actualHost;
+            parsedCb.protocol = actualProto;
+            parsedUrl.searchParams.set("callbackUrl", parsedCb.toString());
+          }
+        } catch {}
+      }
+      finalUrl = parsedUrl.toString();
+      finalHost = actualHost;
+    }
+  } catch (err) {
+    console.error("Rewrite Magic Link URL failed:", err);
+  }
+
+  const transport = createTransport(provider.server);
+  const result = await transport.sendMail({
+    to: identifier,
+    from: provider.from,
+    subject: `Sign in to ${finalHost}`,
+    text: `Sign in to ${finalHost}\n${finalUrl}\n\n`,
+    html: `
+<body style="background: ${theme?.brandColor || "#f9f9f9"}; font-family: Helvetica, Arial, sans-serif;">
+  <table width="100%" border="0" cellspacing="20" cellpadding="0"
+    style="max-width: 600px; margin: auto; border-radius: 10px; background: #fff; padding: 20px;">
+    <tr>
+      <td align="center" style="padding: 10px 0px; font-size: 22px; color: #333;">
+        Sign in to <strong>${finalHost}</strong>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" style="padding: 20px 0;">
+        <table border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td align="center" style="border-radius: 5px;" bgcolor="${theme?.buttonText || "#346df1"}">
+              <a href="${finalUrl}" target="_blank"
+                style="font-size: 18px; color: #fff; text-decoration: none; border-radius: 5px; padding: 10px 20px; border: 1px solid ${theme?.buttonText || "#346df1"}; display: inline-block; font-weight: bold;">
+                Sign in
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" style="padding: 0px 0px 10px 0px; font-size: 16px; line-height: 22px; color: #666;">
+        If you did not request this email you can safely ignore it.
+      </td>
+    </tr>
+  </table>
+</body>
+`,
+  });
+
+  const failed = result.rejected.concat((result as any).pending || []).filter(Boolean);
+  if (failed.length) {
+    throw new Error(`Email(s) (${failed.join(", ")}) could not be sent`);
+  }
+}
+
 export const {
   handlers: { GET, POST },
   auth,
@@ -89,6 +192,7 @@ export const {
     Email({
       server: genEmailSmtpServer(),
       from: process.env.EMAIL_FROM,
+      sendVerificationRequest,
     }),
     // 邮箱密码登录
     Credentials({
