@@ -16,6 +16,33 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { boleMCPServer } from "@/lib/mcp/bole-server";
 
+const MCP_API_KEY = process.env.MCP_API_KEY;
+
+/**
+ * Bearer Token 鉴权
+ *
+ * 若配置了 MCP_API_KEY 环境变量，则校验 Authorization 头；
+ * 未配置时跳过鉴权（开发环境便捷调试）。
+ */
+function authenticate(req: Request): Response | null {
+  if (!MCP_API_KEY) return null; // 未配置 → 跳过鉴权
+
+  const auth = req.headers.get("Authorization");
+  if (auth !== `Bearer ${MCP_API_KEY}`) {
+    return new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        error: { code: -32_600, message: "Unauthorized" },
+      }),
+      {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+  return null; // 鉴权通过
+}
+
 /**
  * 处理 MCP 请求的通用函数
  *
@@ -23,6 +50,10 @@ import { boleMCPServer } from "@/lib/mcp/bole-server";
  * 连接到共享的 MCP Server 实例后处理请求。
  */
 async function handleMCPRequest(req: Request): Promise<Response> {
+  // Bearer Token 鉴权
+  const authError = authenticate(req);
+  if (authError) return authError;
+
   try {
     // 每个请求创建新的 stateless transport
     const transport = new WebStandardStreamableHTTPServerTransport({

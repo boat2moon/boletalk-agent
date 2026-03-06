@@ -261,5 +261,50 @@ export const {
       }
       return session;
     },
+    async redirect({ url, baseUrl }) {
+      // 解决阿里云 FC 内部 Host 变成 0.0.0.0 的问题
+      try {
+        const nextHeaders = await headers();
+        let actualHost = nextHeaders.get("x-fc-custom-domain") || nextHeaders.get("x-forwarded-host") || nextHeaders.get("host") || "";
+        let actualProto = nextHeaders.get("x-forwarded-proto") || "https";
+
+        if (!actualHost || actualHost.includes("0.0.0") || actualHost.includes("127.0.0") || actualHost.includes("localhost")) {
+           const referer = nextHeaders.get("referer");
+           const origin = nextHeaders.get("origin");
+           const sourceUrl = referer || origin;
+           if (sourceUrl) {
+              try {
+                const parsed = new URL(sourceUrl);
+                actualHost = parsed.hostname;
+                actualProto = parsed.protocol.replace(":", "");
+              } catch {}
+           }
+        }
+        
+        const isBadHost = (h: string) => h.includes("0.0.0") || h.includes("127.0.0") || h.includes("localhost");
+        
+        let finalUrl = url;
+        if (url.startsWith("/")) {
+          if (actualHost && !isBadHost(actualHost)) {
+             finalUrl = `${actualProto}://${actualHost}${url}`;
+          } else if (!isBadHost(new URL(baseUrl).hostname)) {
+             finalUrl = `${baseUrl}${url}`;
+          }
+        } else {
+           try {
+             const parsedUrl = new URL(url);
+             if (isBadHost(parsedUrl.hostname) && actualHost && !isBadHost(actualHost)) {
+                parsedUrl.hostname = actualHost;
+                parsedUrl.port = "";
+                parsedUrl.protocol = actualProto;
+                finalUrl = parsedUrl.toString();
+             }
+           } catch {}
+        }
+        return finalUrl;
+      } catch (err) {
+        return url.startsWith("/") ? `${baseUrl}${url}` : url;
+      }
+    },
   },
 });
