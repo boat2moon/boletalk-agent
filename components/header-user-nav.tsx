@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -32,6 +32,7 @@ export function HeaderUserNav() {
   const { data, status } = useSession();
   const { setTheme, resolvedTheme } = useTheme();
   const [showGuestLogoutDialog, setShowGuestLogoutDialog] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isGuest = guestRegex.test(data?.user?.email ?? "");
 
@@ -104,7 +105,13 @@ export function HeaderUserNav() {
           <DropdownMenuItem asChild data-testid="header-user-nav-item-auth">
             <button
               className="w-full cursor-pointer"
+              disabled={isLoggingOut}
               onClick={() => {
+                if (isLoggingOut) {
+                  return;
+                }
+                setIsLoggingOut(true);
+
                 if (isGuest) {
                   router.push("/login");
                 } else {
@@ -115,7 +122,16 @@ export function HeaderUserNav() {
               }}
               type="button"
             >
-              {isGuest ? "登录账户" : "退出登录"}
+              {isLoggingOut ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="size-4 animate-spin" />
+                  处理中...
+                </span>
+              ) : isGuest ? (
+                "登录账户"
+              ) : (
+                "退出登录"
+              )}
             </button>
           </DropdownMenuItem>
           {isGuest && (

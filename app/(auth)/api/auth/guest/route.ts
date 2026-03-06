@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,
-    secureCookie: !shouldUseSecureCookie,
+    secureCookie: shouldUseSecureCookie(request.url),
   });
 
   if (token) {

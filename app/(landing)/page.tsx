@@ -1,6 +1,5 @@
 import { SiGithub } from "@icons-pack/react-simple-icons";
 import {
-  ArrowRight,
   BarChart3,
   Brain,
   CheckCircle2,
@@ -10,13 +9,12 @@ import {
   FileText,
   Globe,
   Link2,
-  Mail,
   MessageSquare,
   Sparkles,
-  UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import { DemoSection } from "@/components/demo-section";
+import { LandingCtaButtons } from "@/components/landing-cta-buttons";
 import { LogoTyping } from "@/components/logo-typing";
 import { ModesSection } from "@/components/modes-section";
 import { ScrollToTopLink } from "@/components/scroll-to-top-link";
@@ -156,35 +154,7 @@ export default function HomePage() {
           </p>
 
           <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
-            <Link href="/login">
-              <Button
-                className="w-full cursor-pointer bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
-                size="lg"
-              >
-                登录 / 注册
-                <ArrowRight className="ml-2 size-4" />
-              </Button>
-            </Link>
-            <Link href="/api/auth/guest?redirectUrl=/chat">
-              <Button
-                className="w-full cursor-pointer bg-transparent sm:w-auto"
-                size="lg"
-                variant="outline"
-              >
-                访客登录
-                <UserPlus className="ml-2 size-4" />
-              </Button>
-            </Link>
-            <Link href="https://boat2moon.com" target="_blank">
-              <Button
-                className="w-full cursor-pointer bg-transparent sm:w-auto"
-                size="lg"
-                variant="outline"
-              >
-                联系开发者
-                <Mail className="ml-2 size-4" />
-              </Button>
-            </Link>
+            <LandingCtaButtons />
           </div>
 
           {/* Highlights */}
@@ -318,35 +288,7 @@ export default function HomePage() {
               四种交互模式，从文本到语音到3D数字人——选择最适合你的方式，立即开始面试练习
             </p>
             <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
-              <Link href="/login">
-                <Button
-                  className="w-full cursor-pointer bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
-                  size="lg"
-                >
-                  登录 / 注册
-                  <ArrowRight className="ml-2 size-4" />
-                </Button>
-              </Link>
-              <Link href="/api/auth/guest?redirectUrl=/chat">
-                <Button
-                  className="w-full cursor-pointer bg-transparent sm:w-auto"
-                  size="lg"
-                  variant="outline"
-                >
-                  访客登录
-                  <UserPlus className="ml-2 size-4" />
-                </Button>
-              </Link>
-              <Link href="https://boat2moon.com" target="_blank">
-                <Button
-                  className="w-full cursor-pointer bg-transparent sm:w-auto"
-                  size="lg"
-                  variant="outline"
-                >
-                  联系开发者
-                  <Mail className="ml-2 size-4" />
-                </Button>
-              </Link>
+              <LandingCtaButtons />
             </div>
           </div>
         </div>

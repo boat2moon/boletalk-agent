@@ -127,32 +127,44 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     : false;
 
   const handleDelete = () => {
-    const deletePromise = fetch(`/api/chat?id=${deleteId}`, {
-      method: "DELETE",
-    });
+    // 乐观更新：立即从 UI 中移除
+    const optimisticData = paginatedChatHistories?.map((chatHistory) => ({
+      ...chatHistory,
+      chats: chatHistory.chats.filter((chat) => chat.id !== deleteId),
+    }));
 
-    toast.promise(deletePromise, {
-      loading: "正在删除对话...",
-      success: () => {
-        mutate((chatHistories) => {
-          if (chatHistories) {
-            return chatHistories.map((chatHistory) => ({
-              ...chatHistory,
-              chats: chatHistory.chats.filter((chat) => chat.id !== deleteId),
-            }));
-          }
-        });
-
-        return "对话已删除";
-      },
-      error: "删除对话失败",
-    });
+    // 如果删除的是当前查看的对话，先跳转
+    if (deleteId === id) {
+      router.push("/chat");
+    }
 
     setShowDeleteDialog(false);
 
-    if (deleteId === id) {
-      router.push("/");
-    }
+    mutate(
+      async (currentData) => {
+        const res = await fetch(`/api/chat?id=${deleteId}`, {
+          method: "DELETE",
+        });
+
+        if (!res.ok) {
+          toast.error("删除对话失败");
+          // 返回原始数据触发回滚
+          return currentData;
+        }
+
+        toast.success("对话已删除");
+
+        return currentData?.map((chatHistory) => ({
+          ...chatHistory,
+          chats: chatHistory.chats.filter((chat) => chat.id !== deleteId),
+        }));
+      },
+      {
+        optimisticData,
+        rollbackOnError: true,
+        revalidate: false,
+      }
+    );
   };
 
   if (!user) {

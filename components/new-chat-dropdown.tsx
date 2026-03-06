@@ -2,6 +2,7 @@
 
 import { LockIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useRef, useState } from "react";
 import { guestRegex } from "@/lib/constants";
 import { PlusIcon } from "./icons";
 import { Button } from "./ui/button";
@@ -33,14 +34,17 @@ export function NewChatDropdown({
 }) {
   const { data: session } = useSession();
   const isGuest = guestRegex.test(session?.user?.email ?? "");
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={setOpen} open={open}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
               className={className ?? "h-8 p-1 md:h-fit md:p-2"}
+              ref={triggerRef}
               type="button"
               variant="ghost"
             >
@@ -62,6 +66,9 @@ export function NewChatDropdown({
               key={mode.value}
               onClick={() => {
                 if (!isBlocked) {
+                  setOpen(false);
+                  // blur 按钮以清除 focus/选中样式
+                  triggerRef.current?.blur();
                   onNewChat(mode.value);
                 }
               }}

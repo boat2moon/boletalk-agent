@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { signOut, useSession } from "next-auth/react";
@@ -34,6 +34,7 @@ export function SidebarUserNav({ user }: { user: User }) {
   const router = useRouter();
   const { data, status } = useSession();
   const [showGuestLogoutDialog, setShowGuestLogoutDialog] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isGuest = guestRegex.test(data?.user?.email ?? user?.email ?? "");
 
@@ -80,8 +81,9 @@ export function SidebarUserNav({ user }: { user: User }) {
             <DropdownMenuItem asChild data-testid="user-nav-item-auth">
               <button
                 className="w-full cursor-pointer"
+                disabled={isLoggingOut}
                 onClick={() => {
-                  if (status === "loading") {
+                  if (status === "loading" || isLoggingOut) {
                     toast({
                       type: "error",
                       description: "正在检查登录状态，请稍后重试！",
@@ -89,6 +91,8 @@ export function SidebarUserNav({ user }: { user: User }) {
 
                     return;
                   }
+
+                  setIsLoggingOut(true);
 
                   if (isGuest) {
                     router.push("/login");
@@ -100,7 +104,16 @@ export function SidebarUserNav({ user }: { user: User }) {
                 }}
                 type="button"
               >
-                {isGuest ? "登录账户" : "退出登录"}
+                {isLoggingOut ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="size-4 animate-spin" />
+                    处理中...
+                  </span>
+                ) : isGuest ? (
+                  "登录账户"
+                ) : (
+                  "退出登录"
+                )}
               </button>
             </DropdownMenuItem>
             {isGuest && (
