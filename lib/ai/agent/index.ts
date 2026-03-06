@@ -138,6 +138,7 @@ export function createChatStream({
       if (classification.resume_opt) {
         result = createResumeOptStream({
           messages,
+          selectedChatModel,
           voiceMode,
           dataStream,
           onUsageUpdate: (usage) => {
@@ -147,6 +148,7 @@ export function createChatStream({
       } else if (classification.mock_interview) {
         result = createMockInterviewStream({
           messages,
+          selectedChatModel,
           voiceMode,
           jobContext,
           userId,

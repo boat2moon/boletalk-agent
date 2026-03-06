@@ -26,6 +26,11 @@ import { myProvider } from "@/lib/ai/providers";
 const resumeAnalysisSchema = z.object({
   /** 候选人背景一句话总结 */
   summary: z.string().describe("候选人的背景和核心竞争力一句话总结"),
+  /** GitHub 个人页链接（从简历中提取） */
+  githubUrl: z
+    .string()
+    .optional()
+    .describe("从简历中提取的 GitHub 个人页链接（如 https://github.com/xxx）"),
   /** 预估工作年限 */
   experienceYears: z.number().describe("候选人的预估工作年限"),
   /** 技术栈列表 */
@@ -61,7 +66,7 @@ export async function analyzeResume(
   resumeText: string
 ): Promise<ResumeAnalysis> {
   const result = await generateObject({
-    model: myProvider.languageModel("chat-model-glm"),
+    model: myProvider.languageModel("internal-model"),
     system: `你是一个资深的技术面试官，擅长分析程序员简历并设计有针对性的面试策略。
 
 请仔细阅读以下简历内容，生成结构化的分析结果。你的分析将用于指导实时语音模拟面试，让面试官能够有针对性地提问。
@@ -75,7 +80,8 @@ export async function analyzeResume(
 6. suggestedInterviewDirections：基于简历内容，设计 5-8 个有针对性的面试问题
    - 问题应该围绕候选人实际做过的项目和技术
    - 要包含追问方向（如性能优化细节、架构决策原因等）
-   - 要有难度梯度（基础 → 深入 → 开放性问题）`,
+   - 要有难度梯度（基础 → 深入 → 开放性问题）
+7. githubUrl：如果简历中包含 GitHub 个人页链接，提取出来（如 https://github.com/xxx）`,
     prompt: `以下是候选人的简历内容：\n\n${resumeText}`,
     schema: resumeAnalysisSchema,
   });
@@ -107,7 +113,7 @@ export function buildRealtimePromptFromAnalysis(
 - 工作年限：约 ${analysis.experienceYears} 年
 - 技术栈：${analysis.techStack.join("、")}
 - 亮点：${analysis.strengths.join("；")}
-- 待考察点：${analysis.weaknesses.join("；")}
+- 待考察点：${analysis.weaknesses.join("；")}${analysis.githubUrl ? `\n- GitHub：${analysis.githubUrl}` : ""}
 
 【建议的面试方向】
 ${directions}

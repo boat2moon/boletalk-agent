@@ -8,7 +8,7 @@
  *   → HyDE（生成假设性回答文档）
  *   → 混合检索（向量 + 全文 + RRF 融合）
  *   → 去重（文本重叠检测）
- *   → ReRank（LLM 打分重排）
+ *   → ReRank（DashScope gte-rerank-v2 专用模型）
  *   → 引用溯源（附带来源信息）
  */
 
@@ -79,7 +79,7 @@ async function generateHypotheticalDoc(query: string): Promise<string> {
     const { myProvider } = await import("@/lib/ai/providers");
 
     const { text } = await generateText({
-      model: myProvider.languageModel("chat-model-glm"),
+      model: myProvider.languageModel("internal-model"),
       prompt: `请针对以下问题，写一段简短但信息丰富的回答（200字以内）。
 这段回答将用于语义检索，所以请尽量包含相关的技术术语和关键概念。
 不要说"我不知道"，直接写出你认为最可能的回答。
@@ -98,13 +98,27 @@ async function generateHypotheticalDoc(query: string): Promise<string> {
   }
 }
 
-// ─── ReRank：LLM 重排 ──────────────────────────────
+// ─── ReRank：DashScope gte-rerank-v2 ────────────────
+
+/** DashScope ReRank API 响应类型 */
+type DashScopeReRankResponse = {
+  output: {
+    results: Array<{
+      index: number;
+      relevance_score: number;
+      document?: { text: string };
+    }>;
+  };
+  usage: {
+    total_tokens: number;
+  };
+};
 
 /**
- * ReRank — 使用 LLM 对候选结果打分
+ * ReRank — 使用 DashScope gte-rerank-v2 专用模型
  *
- * 对初步检索的 Top-N 结果逐一评分（0-10），
- * 根据与原始查询的相关性重新排序。
+ * 比 LLM 打分更快、更准确、更便宜。
+ * 直接调用 DashScope ReRank API，返回每个文档的相关性分数。
  */
 async function rerankResults(
   query: string,
@@ -114,49 +128,65 @@ async function rerankResults(
     return [];
   }
 
+  const apiKey = process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) {
+    console.warn("DASHSCOPE_API_KEY not set, skipping ReRank");
+    return candidates;
+  }
+
   try {
-    const { myProvider } = await import("@/lib/ai/providers");
+    const documents = candidates.map((c) => c.content.slice(0, 1000));
 
-    // 构建评估 prompt
-    const candidateList = candidates
-      .map(
-        (c, i) =>
-          `[文档${i + 1}]\n来源: ${c.citation.source}\n内容: ${c.content.slice(0, 500)}`
-      )
-      .join("\n\n");
+    const response = await fetch(
+      "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gte-rerank-v2",
+          input: { query, documents },
+          parameters: {
+            top_n: candidates.length,
+            return_documents: false,
+          },
+        }),
+      }
+    );
 
-    const { text } = await generateText({
-      model: myProvider.languageModel("chat-model-glm"),
-      prompt: `你是一个文档相关性评分器。请对以下候选文档与查询的相关性打分（0-10分）。
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `DashScope ReRank API error ${response.status}: ${errorText}`
+      );
+    }
 
-查询：${query}
+    const data = (await response.json()) as DashScopeReRankResponse;
+    const results = data.output?.results;
 
-${candidateList}
+    if (!results || results.length === 0) {
+      console.warn("DashScope ReRank returned empty results");
+      return candidates;
+    }
 
-请仅输出每个文档的分数，格式为每行一个数字，按文档顺序排列。例如：
-8
-3
-6
-
-评分：`,
-    });
-
-    // 解析分数
-    const scores = text
-      .trim()
-      .split("\n")
-      .map((line) => {
-        const num = Number.parseFloat(line.trim());
-        return Number.isNaN(num) ? 5 : Math.min(10, Math.max(0, num));
-      });
+    console.log(
+      `[RAG ReRank] gte-rerank-v2 完成, ${results.length} 个结果, ${data.usage?.total_tokens ?? "?"} tokens`
+    );
 
     // 更新分数并排序
-    const reranked = candidates.map((c, i) => ({
-      ...c,
-      relevanceScore: scores[i] ?? 5,
-      // 混合分数：原始RRF占40%，ReRank占60%
-      score: c.score * 0.4 + ((scores[i] ?? 5) / 10) * 0.6,
-    }));
+    // relevance_score 范围：0-1，越高越相关
+    const reranked = candidates.map((c, i) => {
+      const rerankResult = results.find((r) => r.index === i);
+      const relevanceScore = rerankResult?.relevance_score ?? 0;
+      return {
+        ...c,
+        relevanceScore: Math.round(relevanceScore * 10 * 100) / 100, // 转为 0-10 分制（保持接口一致）
+        // 混合分数：原始RRF占40%，ReRank占60%
+        score: c.score * 0.4 + relevanceScore * 0.6,
+      };
+    });
 
     return reranked.sort((a, b) => b.score - a.score);
   } catch (err) {

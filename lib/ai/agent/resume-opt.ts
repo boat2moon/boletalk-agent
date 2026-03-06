@@ -25,6 +25,8 @@ import type { AppUsage } from "@/lib/usage";
 
 export type CreateResumeOptStreamOptions = {
   messages: ChatMessage[];
+  /** 用户选择的对话模型 ID */
+  selectedChatModel: string;
   voiceMode?: boolean;
   /** 数据流写入器，用于推送 usage 和 tool 结果 */
   dataStream: UIMessageStreamWriter<ChatMessage>;
@@ -45,6 +47,7 @@ export type CreateResumeOptStreamOptions = {
  */
 export function createResumeOptStream({
   messages,
+  selectedChatModel,
   voiceMode,
   dataStream,
   onUsageUpdate,
@@ -93,7 +96,7 @@ export function createResumeOptStream({
     systemPrompt += `\n\n${buildVoiceConstraint()}`;
   }
 
-  const model = myProvider.languageModel("chat-model");
+  const model = myProvider.languageModel(selectedChatModel);
 
   return streamText({
     model,

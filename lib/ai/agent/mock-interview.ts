@@ -6,9 +6,13 @@
  * 2. 项目介绍 → 项目挑战 → 性能优化
  * 3. 最后给出综合点评
  *
- * 集成了两个 tool：
+ * 集成的 Tools：
  * - getBehaviouralQuestions：从面试派获取 HR 行为面试题
  * - ragSearch：从知识库检索面试相关参考资料
+ * - memoryRead：用户私域记忆检索
+ * - githubAnalysis：通过 MCP 分析候选人 GitHub 项目
+ * - webSearch：通过 MCP 搜索候选人公开技术内容
+ * - fetchUrl：通过 MCP 抓取在线简历/技术文章
  */
 
 import {
@@ -20,13 +24,18 @@ import { myProvider } from "@/lib/ai/providers";
 import { buildVoiceConstraint } from "@/lib/ai/toolkit/prompt-builder";
 import { createUsageFinishHandler } from "@/lib/ai/toolkit/usage";
 import { getBehaviouralQuestionsTool } from "@/lib/ai/tools/behavioural-questions";
+import { fetchUrlTool } from "@/lib/ai/tools/fetch-url";
+import { githubAnalysisTool } from "@/lib/ai/tools/github-analysis";
 import { createMemoryReadTool } from "@/lib/ai/tools/memory-read";
 import { ragSearchTool } from "@/lib/ai/tools/rag-search";
+import { webSearchTool } from "@/lib/ai/tools/web-search";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 
 export type CreateMockInterviewStreamOptions = {
   messages: ChatMessage[];
+  /** 用户选择的对话模型 ID */
+  selectedChatModel: string;
   voiceMode?: boolean;
   /** 职位 JD 上下文（可选） */
   jobContext?: string;
@@ -51,6 +60,7 @@ export type CreateMockInterviewStreamOptions = {
  */
 export function createMockInterviewStream({
   messages,
+  selectedChatModel,
   voiceMode,
   jobContext,
   userId,
@@ -88,7 +98,13 @@ export function createMockInterviewStream({
 - 场景题，要求思路清晰明了简洁，不要混乱杂乱
 - 项目介绍时，最重要的是能让人听懂看懂这是个什么项目、什么功能，不要一开始就深入细节，这样会很乱
 - 项目挑战和难点，可使用 STAR 模板来讲，这样才够清晰明了
-- 项目性能优化，最好能有具体的例子和量化指标`;
+- 项目性能优化，最好能有具体的例子和量化指标
+
+当候选人在对话中提到了 GitHub 用户名或仓库链接时，使用 githubAnalysis 工具来分析他们的开源项目，评价代码风格和项目质量，并据此生成针对性的追问。
+
+当你需要了解候选人的公开技术贡献（博客、社区回答等）时，使用 webSearch 工具搜索相关信息。
+
+当候选人分享了在线简历或技术文章的 URL 时，使用 fetchUrl 工具获取页面内容。`;
 
   if (jobContext) {
     systemPrompt += `\n\n${jobContext}`;
@@ -98,22 +114,28 @@ export function createMockInterviewStream({
     systemPrompt += `\n\n${buildVoiceConstraint()}`;
   }
 
-  const model = myProvider.languageModel("chat-model");
+  const model = myProvider.languageModel(selectedChatModel);
 
   return streamText({
     model,
     system: systemPrompt,
     messages: convertToModelMessages(messages),
-    // 启用行为面试题 tool 和 RAG 检索 tool
+    // 启用所有 Tools（含 MCP 工具）
     experimental_activeTools: [
       "getBehaviouralQuestions",
       "ragSearch",
       "memoryRead",
+      "githubAnalysis",
+      "webSearch",
+      "fetchUrl",
     ],
     tools: {
       getBehaviouralQuestions: getBehaviouralQuestionsTool,
       ragSearch: ragSearchTool,
       memoryRead: createMemoryReadTool(userId),
+      githubAnalysis: githubAnalysisTool,
+      webSearch: webSearchTool,
+      fetchUrl: fetchUrlTool,
     },
     onFinish: createUsageFinishHandler({
       modelId: model.modelId,
