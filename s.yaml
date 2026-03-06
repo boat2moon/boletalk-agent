@@ -44,6 +44,20 @@ resources:
         - run: echo "AVATAR_TENANT_ID=${env(AVATAR_TENANT_ID)}" >> .env.local
         - run: echo "AVATAR_APP_ID=${env(AVATAR_APP_ID)}" >> .env.local
         - run: echo "AVATAR_INSTANCE_ID=${env(AVATAR_INSTANCE_ID)}" >> .env.local
+        # 豆包语音（流式 STT + 流式 TTS，火山引擎）
+        - run: echo "DOUBAO_VOICE_APP_ID=${env(DOUBAO_VOICE_APP_ID)}" >> .env.local
+        - run: echo "DOUBAO_VOICE_ACCESS_TOKEN=${env(DOUBAO_VOICE_ACCESS_TOKEN)}" >> .env.local
+        - run: echo "DOUBAO_TTS_VOICE_TYPE=${env(DOUBAO_TTS_VOICE_TYPE)}" >> .env.local
+        # 阿里云智能语音交互（实时 ASR）
+        - run: echo "ALI_NLS_APPKEY=${env(ALI_NLS_APPKEY)}" >> .env.local
+        # 智谱 GLM API Key
+        - run: echo "GLM_API_KEY=${env(GLM_API_KEY)}" >> .env.local
+        # 阿里云百炼 DashScope
+        - run: echo "DASHSCOPE_API_KEY=${env(DASHSCOPE_API_KEY)}" >> .env.local
+        # GitHub MCP - 分析候选人开源项目
+        - run: echo "GITHUB_TOKEN=${env(GITHUB_TOKEN)}" >> .env.local
+        # Tavily Web Search MCP - 搜索候选人技术博客/社区贡献
+        - run: echo "TAVILY_API_KEY=${env(TAVILY_API_KEY)}" >> .env.local
         # -------------------------------------------------------------------------
         # 构建 Next.js standalone 产物
         # -------------------------------------------------------------------------
@@ -89,6 +103,20 @@ resources:
         AVATAR_TENANT_ID: ${env(AVATAR_TENANT_ID)}
         AVATAR_APP_ID: ${env(AVATAR_APP_ID)}
         AVATAR_INSTANCE_ID: ${env(AVATAR_INSTANCE_ID)}
+        # 豆包语音（流式 STT + 流式 TTS，火山引擎）
+        DOUBAO_VOICE_APP_ID: ${env(DOUBAO_VOICE_APP_ID)}
+        DOUBAO_VOICE_ACCESS_TOKEN: ${env(DOUBAO_VOICE_ACCESS_TOKEN)}
+        DOUBAO_TTS_VOICE_TYPE: ${env(DOUBAO_TTS_VOICE_TYPE)}
+        # 阿里云智能语音交互（实时 ASR）
+        ALI_NLS_APPKEY: ${env(ALI_NLS_APPKEY)}
+        # 智谱 GLM API Key
+        GLM_API_KEY: ${env(GLM_API_KEY)}
+        # 阿里云百炼 DashScope
+        DASHSCOPE_API_KEY: ${env(DASHSCOPE_API_KEY)}
+        # GitHub MCP - 分析候选人开源项目
+        GITHUB_TOKEN: ${env(GITHUB_TOKEN)}
+        # Tavily Web Search MCP - 搜索候选人技术博客/社区贡献
+        TAVILY_API_KEY: ${env(TAVILY_API_KEY)}
       customRuntimeConfig:
         command:
           - node
