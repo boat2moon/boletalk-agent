@@ -78,11 +78,11 @@ const modes = [
     color: "text-purple-500",
     activeBg: "bg-purple-500/10 border-purple-500/30",
     activeGlow: "shadow-purple-500/10",
-    title: "3D 数字人视频面试",
+    title: "数字人视频面试",
     description:
-      "3D 数字人（可为VIP用户提供更真实模型） + 浏览器端 Silero VAD 语音检测 + 流式 ASR，免按钮实时视频面试体验。",
+      "数字人（可为VIP用户提供更真实模型） + 浏览器端 Silero VAD 语音检测 + 流式 ASR，免按钮实时视频面试体验。",
     features: [
-      "3D 数字人流媒体播报模式",
+      "数字人流媒体播报模式",
       "Silero VAD 浏览器端 ONNX 推理",
       "免按钮自动轮次判定",
       "逐句发送延迟优化（5s → 1~2s）",

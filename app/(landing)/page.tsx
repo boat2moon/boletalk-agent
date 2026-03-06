@@ -170,7 +170,7 @@ export default function HomePage() {
           </h1>
 
           <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground md:text-xl">
-            支持文本、语音、实时电话、3D 数字人视频四种面试模式，集成 RAG
+            支持文本、语音、实时电话、数字人视频四种面试模式，集成 RAG
             知识库检索与个性化记忆系统的全栈 AI 面试助手
           </p>
 

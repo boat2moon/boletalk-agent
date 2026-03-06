@@ -110,8 +110,7 @@ export function AvatarPreparationView({
           </div>
           <h2 className="font-bold text-2xl">数字人模拟面试</h2>
           <p className="mt-2 max-w-md text-muted-foreground text-sm">
-            与 3D 数字人面试官进行视频面试。
-            上传简历可获得更有针对性的面试体验。
+            与数字人面试官进行视频面试。 上传简历可获得更有针对性的面试体验。
           </p>
         </div>
 
