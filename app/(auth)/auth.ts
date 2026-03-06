@@ -323,7 +323,7 @@ export const {
 
         let finalUrl = url;
         if (url.startsWith("/")) {
-          finalUrl = `${isLocal ? "http" : actualProto}://${actualHost}${url}`;
+          finalUrl = `${actualProto}://${actualHost}${url}`;
         } else {
           try {
             const parsedUrl = new URL(url);
@@ -332,7 +332,7 @@ export const {
               if (!isLocal) {
                 parsedUrl.port = "";
               }
-              parsedUrl.protocol = isLocal ? "http" : actualProto;
+              parsedUrl.protocol = actualProto;
               finalUrl = parsedUrl.toString();
             }
           } catch {

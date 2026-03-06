@@ -20,8 +20,7 @@ async function resolveBaseUrl(requestUrl: string): Promise<string> {
     const proto = nextHeaders.get("x-forwarded-proto") || "https";
 
     if (host && !host.includes("0.0.0")) {
-      const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
-      return `${isLocal ? "http" : proto}://${host}`;
+      return `${proto}://${host}`;
     }
   } catch {
     // fallback

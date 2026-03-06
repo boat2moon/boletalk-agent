@@ -483,7 +483,7 @@ export function AvatarSessionView({
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* 左侧：数字人视频区域（9:16 竖屏，宽度随高度自适应） */}
-      <div className="relative aspect-[9/16] shrink-0 bg-black">
+      <div className="relative aspect-9/16 shrink-0 bg-black">
         {/* SDK 会在这个 div 内自动创建 video 元素 */}
         {/* biome-ignore lint/a11y/useSemanticElements: video container needs onClick for autoplay fallback */}
         <div
