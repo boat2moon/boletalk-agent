@@ -18,6 +18,7 @@ import {
   type ChatHistory,
   getChatHistoryPaginationKey,
 } from "@/components/sidebar-history";
+import { useVoiceMode } from "@/components/voice-mode-context";
 import { DEFAULT_REALTIME_MODEL } from "@/lib/ai/realtime-models";
 import type { ResumeAnalysis } from "@/lib/ai/toolkit/resume-analyzer";
 import { generateUUID } from "@/lib/utils";
@@ -56,6 +57,9 @@ export function RealtimePage({
   >();
   const chatIdRef = useRef(generateUUID());
   const { mutate } = useSWRConfig();
+  const { setSessionActive, setRequestEndSession } = useVoiceMode();
+  /** CallView 暴露的挂断函数 ref */
+  const endCallTriggerRef = useRef<(() => void) | null>(null);
 
   /**
    * 开始面试
@@ -176,6 +180,31 @@ export function RealtimePage({
     onHasActiveChatChange?.(phase !== "preparation");
   }, [phase, onHasActiveChatChange]);
 
+  // 注册/注销 session active 状态和挂断回调
+  useEffect(() => {
+    const isActive = phase === "call";
+    setSessionActive(isActive);
+
+    if (isActive) {
+      setRequestEndSession(() => {
+        return new Promise<void>((resolve) => {
+          // 触发 CallView 的 handleEndCall
+          endCallTriggerRef.current?.();
+          // handleCallEnd 是同步被调用的，resolve 让外部知道挂断流程已启动
+          // save-transcript 等后续操作在 handleCallEnd 内部异步完成
+          resolve();
+        });
+      });
+    } else {
+      setRequestEndSession(null);
+    }
+
+    return () => {
+      setSessionActive(false);
+      setRequestEndSession(null);
+    };
+  }, [phase, setSessionActive, setRequestEndSession]);
+
   return (
     <div className="flex flex-1 flex-col bg-background">
       {!hideHeader && (
@@ -198,6 +227,7 @@ export function RealtimePage({
 
       {phase === "call" && wsInfoRef.current && (
         <CallView
+          endCallTriggerRef={endCallTriggerRef}
           onEnd={handleCallEnd}
           sessionToken={wsInfoRef.current.sessionToken}
           wsUrl={wsInfoRef.current.wsUrl}

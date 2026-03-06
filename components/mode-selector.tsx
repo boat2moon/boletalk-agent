@@ -6,6 +6,16 @@ import { useSession } from "next-auth/react";
 import { memo, useEffect, useRef, useState, useTransition } from "react";
 import { guestRegex } from "@/lib/constants";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -27,7 +37,8 @@ const MODE_OPTIONS: ModeOption[] = [
 ];
 
 function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
-  const { voiceMode, setVoiceMode } = useVoiceMode();
+  const { voiceMode, setVoiceMode, isSessionActive, requestEndSession } =
+    useVoiceMode();
   const { data: session } = useSession();
   const isGuest = guestRegex.test(session?.user?.email ?? "");
   const router = useRouter();
@@ -39,6 +50,8 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
   // 首次渲染时跳过动画，直接定位到正确位置
   const [enableTransition, setEnableTransition] = useState(false);
   const [, startTransition] = useTransition();
+  /** 等待用户确认的目标模式 */
+  const [pendingMode, setPendingMode] = useState<VoiceMode | null>(null);
 
   // 计算滑动指示器的位置
   useEffect(() => {
@@ -103,102 +116,147 @@ function PureModeSelector({ hasActiveChat }: { hasActiveChat?: boolean }) {
   }, [voiceMode]);
 
   return (
-    <div
-      className="relative flex items-center rounded-xl bg-muted/80 p-1"
-      ref={containerRef}
-    >
-      {/* 滑动背景指示器 */}
+    <>
       <div
-        className={`absolute top-1 bottom-1 rounded-lg bg-[#2979ff]/40 shadow-sm ease-in-out dark:bg-[#00e676]/20 ${
-          enableTransition ? "transition-all duration-300" : ""
-        }`}
-        style={{
-          left: `${indicatorStyle.left}px`,
-          width: `${indicatorStyle.width}px`,
-        }}
-      />
+        className="relative flex items-center rounded-xl bg-muted/80 p-1"
+        ref={containerRef}
+      >
+        {/* 滑动背景指示器 */}
+        <div
+          className={`absolute top-1 bottom-1 rounded-lg bg-[#2979ff]/40 shadow-sm ease-in-out dark:bg-[#00e676]/20 ${
+            enableTransition ? "transition-all duration-300" : ""
+          }`}
+          style={{
+            left: `${indicatorStyle.left}px`,
+            width: `${indicatorStyle.width}px`,
+          }}
+        />
 
-      {MODE_OPTIONS.map((option) => {
-        const isActive = voiceMode === option.value;
-        // 访客不允许使用视频面试
-        const isGuestBlocked = isGuest && option.value === "avatar";
-        // 有活跃会话且非当前模式 → 点击将新建会话
-        const isNewChatAction = hasActiveChat && !isActive && !isGuestBlocked;
+        {MODE_OPTIONS.map((option) => {
+          const isActive = voiceMode === option.value;
+          // 访客不允许使用视频面试
+          const isGuestBlocked = isGuest && option.value === "avatar";
+          // 有活跃会话且非当前模式 → 点击将新建会话
+          const isNewChatAction = hasActiveChat && !isActive && !isGuestBlocked;
 
-        const button = (
-          <button
-            className={`relative z-10 flex items-center gap-1 rounded-lg px-3 py-1.5 font-medium text-sm transition-colors duration-200 ${
-              isActive
-                ? "text-foreground"
-                : isGuestBlocked
-                  ? "cursor-not-allowed text-muted-foreground/40"
-                  : "cursor-pointer text-muted-foreground hover:text-foreground/70"
-            }
+          const button = (
+            <button
+              className={`relative z-10 flex items-center gap-1 rounded-lg px-3 py-1.5 font-medium text-sm transition-colors duration-200 ${
+                isActive
+                  ? "text-foreground"
+                  : isGuestBlocked
+                    ? "cursor-not-allowed text-muted-foreground/40"
+                    : "cursor-pointer text-muted-foreground hover:text-foreground/70"
+              }
             `}
-            data-mode-btn
-            disabled={isGuestBlocked}
-            key={option.value}
-            onClick={() => {
-              if (isGuestBlocked) {
-                return;
-              }
-              if (isNewChatAction) {
-                // 先切换模式触发滑动动画，让 React 知道这个状态更新优先级更高
-                setVoiceMode(option.value);
-                // 使用 startTransition 包裹路由跳转，避免路由切换阻塞 UI 动画渲染
-                startTransition(() => {
-                  router.push("/chat");
-                  router.refresh();
-                });
-              } else if (!isActive) {
-                setVoiceMode(option.value);
-              }
-            }}
-            type="button"
-          >
-            <span className="hidden sm:inline">{option.label}</span>
-            <span className="sm:hidden">{option.shortLabel}</span>
-            {isGuestBlocked && <LockIcon className="opacity-50" size={10} />}
-          </button>
-        );
-
-        // 访客限制 tooltip
-        if (isGuestBlocked) {
-          return (
-            <TooltipProvider delayDuration={0} key={option.value}>
-              <Tooltip>
-                <TooltipTrigger asChild>{button}</TooltipTrigger>
-                <TooltipContent
-                  className="z-50 border-zinc-700 bg-zinc-800 text-white"
-                  side="bottom"
-                >
-                  <p>访客不可用，请先登录</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+              data-mode-btn
+              disabled={isGuestBlocked}
+              key={option.value}
+              onClick={() => {
+                if (isGuestBlocked) {
+                  return;
+                }
+                if (isNewChatAction) {
+                  if (isSessionActive) {
+                    // 面试进行中 → 弹出二次确认
+                    setPendingMode(option.value);
+                    return;
+                  }
+                  // 先切换模式触发滑动动画
+                  setVoiceMode(option.value);
+                  startTransition(() => {
+                    router.push("/chat");
+                    router.refresh();
+                  });
+                } else if (!isActive) {
+                  setVoiceMode(option.value);
+                }
+              }}
+              type="button"
+            >
+              <span className="hidden sm:inline">{option.label}</span>
+              <span className="sm:hidden">{option.shortLabel}</span>
+              {isGuestBlocked && <LockIcon className="opacity-50" size={10} />}
+            </button>
           );
-        }
 
-        // 有活跃会话时提示"新建XX会话"
-        if (isNewChatAction) {
-          return (
-            <TooltipProvider delayDuration={0} key={option.value}>
-              <Tooltip>
-                <TooltipTrigger asChild>{button}</TooltipTrigger>
-                <TooltipContent
-                  className="z-50 border-zinc-700 bg-zinc-800 text-white"
-                  side="bottom"
-                >
-                  <p>新建{option.label}会话</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          );
-        }
+          // 访客限制 tooltip
+          if (isGuestBlocked) {
+            return (
+              <TooltipProvider delayDuration={0} key={option.value}>
+                <Tooltip>
+                  <TooltipTrigger asChild>{button}</TooltipTrigger>
+                  <TooltipContent
+                    className="z-50 border-zinc-700 bg-zinc-800 text-white"
+                    side="bottom"
+                  >
+                    <p>访客不可用，请先登录</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          }
 
-        return button;
-      })}
-    </div>
+          // 有活跃会话时提示"新建XX会话"
+          if (isNewChatAction) {
+            return (
+              <TooltipProvider delayDuration={0} key={option.value}>
+                <Tooltip>
+                  <TooltipTrigger asChild>{button}</TooltipTrigger>
+                  <TooltipContent
+                    className="z-50 border-zinc-700 bg-zinc-800 text-white"
+                    side="bottom"
+                  >
+                    <p>新建{option.label}会话</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          }
+
+          return button;
+        })}
+      </div>
+
+      {/* 面试进行中结束确认弹窗 */}
+      <AlertDialog
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setPendingMode(null);
+          }
+        }}
+        open={!!pendingMode}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>面试正在进行中</AlertDialogTitle>
+            <AlertDialogDescription>
+              当前有正在进行的面试，切换模式将结束当前面试并保存记录。确定要结束吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>继续面试</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (requestEndSession) {
+                  await requestEndSession();
+                }
+                if (pendingMode) {
+                  setVoiceMode(pendingMode);
+                  startTransition(() => {
+                    router.push("/chat");
+                    router.refresh();
+                  });
+                }
+                setPendingMode(null);
+              }}
+            >
+              结束并新建
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

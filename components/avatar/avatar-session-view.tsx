@@ -11,7 +11,13 @@
  */
 
 import { Loader2, Mic, MicOff, Send, Square } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAvatarVoice, type VoiceStatus } from "@/hooks/use-avatar-voice";
@@ -147,6 +153,7 @@ export function AvatarSessionView({
   resumeAnalysis,
   jobContext,
   onEnd,
+  endCallTriggerRef,
 }: {
   sessionId: string;
   channel: AvatarChannel;
@@ -154,6 +161,8 @@ export function AvatarSessionView({
   /** 职位 JD 上下文（可选） */
   jobContext?: string;
   onEnd: (messages: AvatarMessage[], duration: number) => void;
+  /** 外部可通过此 ref 触发正常结束面试 */
+  endCallTriggerRef?: MutableRefObject<(() => void) | null>;
 }) {
   const [messages, setMessages] = useState<AvatarMessage[]>([]);
   const [inputText, setInputText] = useState("");
@@ -421,6 +430,18 @@ export function AvatarSessionView({
     handleEndRef.current = handleEnd;
   }, [handleEnd]);
 
+  // 暴露 handleEnd 给外部（通过 ref）
+  useEffect(() => {
+    if (endCallTriggerRef) {
+      endCallTriggerRef.current = handleEnd;
+    }
+    return () => {
+      if (endCallTriggerRef) {
+        endCallTriggerRef.current = null;
+      }
+    };
+  }, [handleEnd, endCallTriggerRef]);
+
   // ── 超时保护：最长 5 分钟 + 初始 1 分钟空闲 ─────────────
   useEffect(() => {
     // 5 分钟总时长保护
@@ -460,9 +481,9 @@ export function AvatarSessionView({
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* 数字人视频区域 */}
-      <div className="relative min-h-0 flex-1 bg-black">
+    <div className="flex min-h-0 flex-1 overflow-hidden">
+      {/* 左侧：数字人视频区域（9:16 竖屏） */}
+      <div className="relative flex w-[40%] shrink-0 items-center justify-center bg-black">
         {/* SDK 会在这个 div 内自动创建 video 元素 */}
         {/* biome-ignore lint/a11y/useSemanticElements: video container needs onClick for autoplay fallback */}
         <div
@@ -494,7 +515,7 @@ export function AvatarSessionView({
           </div>
         )}
 
-        {/* 结束面试按钮（悬浮在视频上方） */}
+        {/* 结束面试按钮 */}
         <div className="absolute top-4 right-4">
           <Button
             className="gap-2 rounded-full bg-red-600/80 text-white backdrop-blur hover:bg-red-600"
@@ -515,8 +536,8 @@ export function AvatarSessionView({
         {isSDKReady && <VoiceStatusIndicator voiceStatus={voiceStatus} />}
       </div>
 
-      {/* 对话区域 */}
-      <div className="flex h-64 flex-col border-t bg-background">
+      {/* 右侧：对话区域 */}
+      <div className="flex min-w-0 flex-1 flex-col border-l bg-background">
         {/* 消息列表 */}
         <div className="flex-1 overflow-y-auto px-4 py-3">
           {messages.length === 0 && (

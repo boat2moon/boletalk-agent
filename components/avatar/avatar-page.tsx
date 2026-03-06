@@ -23,6 +23,7 @@ import {
   type ChatHistory,
   getChatHistoryPaginationKey,
 } from "@/components/sidebar-history";
+import { useVoiceMode } from "@/components/voice-mode-context";
 import type { ResumeAnalysis } from "@/lib/ai/toolkit/resume-analyzer";
 import { generateUUID } from "@/lib/utils";
 import { AvatarPreparationView } from "./avatar-preparation-view";
@@ -71,6 +72,9 @@ export function AvatarPage({
   >();
   const [jobContext, setJobContext] = useState<string | undefined>();
   const { mutate } = useSWRConfig();
+  const { setSessionActive, setRequestEndSession } = useVoiceMode();
+  /** AvatarSessionView 暴露的结束面试函数 ref */
+  const endCallTriggerRef = useRef<(() => void) | null>(null);
 
   /**
    * 开始面试：两阶段流程
@@ -238,6 +242,28 @@ export function AvatarPage({
     onHasActiveChatChange?.(phase !== "preparation");
   }, [phase, onHasActiveChatChange]);
 
+  // 注册/注销 session active 状态和挂断回调
+  useEffect(() => {
+    const isActive = phase === "session";
+    setSessionActive(isActive);
+
+    if (isActive) {
+      setRequestEndSession(() => {
+        return new Promise<void>((resolve) => {
+          endCallTriggerRef.current?.();
+          resolve();
+        });
+      });
+    } else {
+      setRequestEndSession(null);
+    }
+
+    return () => {
+      setSessionActive(false);
+      setRequestEndSession(null);
+    };
+  }, [phase, setSessionActive, setRequestEndSession]);
+
   // 页面卸载时确保停止数字人实例
   useEffect(() => {
     const currentSessionId = sessionId;
@@ -277,6 +303,7 @@ export function AvatarPage({
       {phase === "session" && sessionId && channel && (
         <AvatarSessionView
           channel={channel}
+          endCallTriggerRef={endCallTriggerRef}
           jobContext={jobContext}
           onEnd={handleSessionEnd}
           resumeAnalysis={resumeAnalysis}

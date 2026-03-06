@@ -12,7 +12,13 @@
  */
 
 import { Loader2, Mic, MicOff, PhoneOff } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { SparklesIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -24,10 +30,13 @@ export function CallView({
   wsUrl,
   sessionToken,
   onEnd,
+  endCallTriggerRef,
 }: {
   wsUrl: string;
   sessionToken: string;
   onEnd: (transcript: TranscriptEntry[], duration: number) => void;
+  /** 外部可通过此 ref 触发正常挂断 */
+  endCallTriggerRef?: MutableRefObject<(() => void) | null>;
 }) {
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [isMuted, setIsMuted] = useState(false);
@@ -268,6 +277,18 @@ export function CallView({
     cleanup();
     onEnd(transcriptRef.current, duration);
   }, [onEnd, cleanup]);
+
+  // 暴露 handleEndCall 给外部（通过 ref）
+  useEffect(() => {
+    if (endCallTriggerRef) {
+      endCallTriggerRef.current = handleEndCall;
+    }
+    return () => {
+      if (endCallTriggerRef) {
+        endCallTriggerRef.current = null;
+      }
+    };
+  }, [handleEndCall, endCallTriggerRef]);
 
   /**
    * 处理 bole-server 发来的消息

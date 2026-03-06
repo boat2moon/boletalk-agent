@@ -2,7 +2,7 @@
 
 import { isToday, isYesterday, subMonths, subWeeks } from "date-fns";
 import { motion } from "framer-motion";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { User } from "next-auth";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -114,7 +114,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     fallbackData: [],
   });
 
-  const router = useRouter();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -133,9 +132,10 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
       chats: chatHistory.chats.filter((chat) => chat.id !== deleteId),
     }));
 
-    // 如果删除的是当前查看的对话，先跳转
+    // 如果删除的是当前查看的对话，立即跳转清除右侧内容
     if (deleteId === id) {
-      router.push("/chat");
+      window.location.replace("/chat");
+      return; // 页面即将刷新，无需后续操作
     }
 
     setShowDeleteDialog(false);
