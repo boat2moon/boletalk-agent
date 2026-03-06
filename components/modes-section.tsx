@@ -34,7 +34,7 @@ const modes = [
   {
     key: "voice",
     icon: Mic,
-    label: "语音面试",
+    label: "语音交互",
     color: "text-emerald-500",
     activeBg: "bg-emerald-500/10 border-emerald-500/30",
     activeGlow: "shadow-emerald-500/10",
@@ -54,7 +54,7 @@ const modes = [
   {
     key: "phone",
     icon: Phone,
-    label: "实时电话面试",
+    label: "端到端电话面试",
     color: "text-amber-500",
     activeBg: "bg-amber-500/10 border-amber-500/30",
     activeGlow: "shadow-amber-500/10",
@@ -74,13 +74,13 @@ const modes = [
   {
     key: "avatar",
     icon: Video,
-    label: "3D 数字人面试",
+    label: "数字人视频面试",
     color: "text-purple-500",
     activeBg: "bg-purple-500/10 border-purple-500/30",
     activeGlow: "shadow-purple-500/10",
     title: "3D 数字人视频面试",
     description:
-      "阿里云 3D 数字人 + 浏览器端 Silero VAD 语音检测 + 流式 ASR，免按钮实时视频面试体验。",
+      "3D 数字人（可为VIP用户提供更真实模型） + 浏览器端 Silero VAD 语音检测 + 流式 ASR，免按钮实时视频面试体验。",
     features: [
       "3D 数字人流媒体播报模式",
       "Silero VAD 浏览器端 ONNX 推理",
