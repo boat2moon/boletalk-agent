@@ -60,6 +60,11 @@ export const metadata: Metadata = {
     icon: "/favicon.ico",
     apple: "/favicon.ico",
   },
+  verification: {
+    other: {
+      "msvalidate.01": "B287BE39F49AE2E541D73C3C926E0AEF",
+    },
+  },
 };
 
 export const viewport = {
