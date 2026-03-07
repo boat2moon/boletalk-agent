@@ -18,6 +18,30 @@ const nextConfig = {
       },
     ],
   },
+  // 非主域名 → 301 永久重定向到 www.bltalk.top
+  // 裸域和 www 域名的 Cookie 不共享，不统一会导致登录状态丢失
+  redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "bltalk.top" }],
+        destination: "https://www.bltalk.top/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "boletalk.top" }],
+        destination: "https://www.bltalk.top/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.boletalk.top" }],
+        destination: "https://www.bltalk.top/:path*",
+        permanent: true,
+      },
+    ];
+  },
 } satisfies NextConfig & { proxyClientMaxBodySize?: string };
 
 export default nextConfig;
