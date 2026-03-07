@@ -8,7 +8,7 @@ import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://boletalk.chat"),
+  metadataBase: new URL("https://www.bltalk.top"),
   title: {
     default: "伯乐Talk - AI 智能面试官",
     template: "%s | 伯乐Talk",
@@ -27,12 +27,12 @@ export const metadata: Metadata = {
     "语音面试",
     "面试评估",
   ],
-  authors: [{ name: "伯乐Talk", url: "https://boletalk.chat" }],
+  authors: [{ name: "伯乐Talk", url: "https://www.bltalk.top" }],
   creator: "伯乐Talk",
   openGraph: {
     type: "website",
     locale: "zh_CN",
-    url: "https://boletalk.chat",
+    url: "https://www.bltalk.top",
     siteName: "伯乐Talk",
     title: "伯乐Talk - AI 智能面试官",
     description:
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
     images: ["/opengraph-image.png"],
   },
   alternates: {
-    canonical: "https://boletalk.chat",
+    canonical: "https://www.bltalk.top",
   },
   icons: {
     icon: "/favicon.ico",

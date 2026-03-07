@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/api/", "/chat/", "/login", "/register"],
     },
-    sitemap: "https://boletalk.chat/sitemap.xml",
+    sitemap: "https://www.bltalk.top/sitemap.xml",
   };
 }

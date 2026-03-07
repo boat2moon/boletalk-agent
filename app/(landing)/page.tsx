@@ -114,7 +114,7 @@ export default function HomePage() {
     "@type": "WebApplication",
     name: "伯乐Talk",
     alternateName: "BoleTalk",
-    url: "https://boletalk.chat",
+    url: "https://www.bltalk.top",
     description:
       "多模态 AI 面试助手，支持文本、语音、实时电话、数字人视频四种面试模式，集成 RAG 知识库检索与个性化记忆系统",
     applicationCategory: "Education",
