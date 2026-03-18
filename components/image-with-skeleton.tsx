@@ -8,6 +8,7 @@ type ImageWithSkeletonProps = {
   alt: string;
   className?: string;
   skeletonClassName?: string;
+  hidden?: boolean;
 };
 
 export function ImageWithSkeleton({
@@ -15,6 +16,7 @@ export function ImageWithSkeleton({
   alt,
   className = "",
   skeletonClassName = "",
+  hidden = false,
 }: ImageWithSkeletonProps) {
   const [loaded, setLoaded] = useState(false);
 
@@ -26,7 +28,7 @@ export function ImageWithSkeleton({
   }, []);
 
   return (
-    <div className="relative w-full">
+    <div className={`relative w-full ${hidden ? "hidden" : ""}`}>
       {/* Skeleton 占位 */}
       {!loaded && (
         <Skeleton

@@ -168,29 +168,37 @@ export function ModesSection() {
 
           {/* Right: Image/Placeholder */}
           <div className="flex items-center justify-center bg-muted/30 p-6 md:p-10">
-            {current.image && !current.image.includes("placeholder") ? (
-              <ImageWithSkeleton
-                alt={current.label}
-                className={`rounded-xl border-2 border-dashed ${current.activeBg} transition-colors duration-300`}
-                key={current.key}
-                skeletonClassName={`border-2 border-dashed ${current.activeBg}`}
-                src={current.image}
-              />
-            ) : (
-              <div
-                className={`flex aspect-video w-full flex-col items-center justify-center rounded-xl border-2 border-dashed ${current.activeBg} transition-colors duration-300`}
-              >
-                <current.icon
-                  className={`mb-3 size-16 ${current.color} opacity-30`}
-                />
-                <span className="font-medium text-muted-foreground text-sm">
-                  {current.label}演示截图 / GIF
-                </span>
-                <span className="mt-1 text-muted-foreground/60 text-xs">
-                  后续替换为真实录屏
-                </span>
-              </div>
-            )}
+            {modes.map((mode, i) => {
+              const isActive = i === activeMode;
+              if (mode.image && !mode.image.includes("placeholder")) {
+                return (
+                  <ImageWithSkeleton
+                    alt={mode.label}
+                    className={`rounded-xl border-2 border-dashed ${mode.activeBg} transition-colors duration-300`}
+                    hidden={!isActive}
+                    key={mode.key}
+                    skeletonClassName={`border-2 border-dashed ${mode.activeBg}`}
+                    src={mode.image}
+                  />
+                );
+              }
+              return (
+                <div
+                  className={`flex aspect-video w-full flex-col items-center justify-center rounded-xl border-2 border-dashed ${mode.activeBg} transition-colors duration-300 ${isActive ? "" : "hidden"}`}
+                  key={mode.key}
+                >
+                  <mode.icon
+                    className={`mb-3 size-16 ${mode.color} opacity-30`}
+                  />
+                  <span className="font-medium text-muted-foreground text-sm">
+                    {mode.label}演示截图 / GIF
+                  </span>
+                  <span className="mt-1 text-muted-foreground/60 text-xs">
+                    后续替换为真实录屏
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
