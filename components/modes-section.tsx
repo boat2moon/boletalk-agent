@@ -50,7 +50,7 @@ const modes = [
       "文本流延迟释放实现音画同步",
       "全局 Provider 音频缓存零延迟重播",
     ],
-    image: "/images/基础语音对话2.gif",
+    image: "/images/voice-chat.gif",
   },
   {
     key: "phone",
@@ -70,7 +70,7 @@ const modes = [
       "JWT 鉴权 + Web Crypto API",
       "支持简历上传 + JD 模板选择",
     ],
-    image: "/images/端到端电话面试2.gif",
+    image: "/images/phone-interview.gif",
   },
   {
     key: "avatar",
@@ -90,7 +90,7 @@ const modes = [
       "打断式半双工支持",
       "WebRTC 实时视频流",
     ],
-    image: "/images/数字人视频面试2.gif",
+    image: "/images/avatar-interview.gif",
   },
 ];
 
