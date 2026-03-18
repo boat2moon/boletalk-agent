@@ -9,6 +9,7 @@ import {
   Video,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ImageWithSkeleton } from "@/components/image-with-skeleton";
 
 const modes = [
   {
@@ -168,11 +169,11 @@ export function ModesSection() {
           {/* Right: Image/Placeholder */}
           <div className="flex items-center justify-center bg-muted/30 p-6 md:p-10">
             {current.image && !current.image.includes("placeholder") ? (
-              // biome-ignore lint/nursery/useImageSize: GIF images
-              // biome-ignore lint/performance/noImgElement: GIF needs raw img
-              <img
+              <ImageWithSkeleton
                 alt={current.label}
-                className={`w-full rounded-xl border-2 border-dashed ${current.activeBg} transition-colors duration-300`}
+                className={`rounded-xl border-2 border-dashed ${current.activeBg} transition-colors duration-300`}
+                key={current.key}
+                skeletonClassName={`border-2 border-dashed ${current.activeBg}`}
                 src={current.image}
               />
             ) : (

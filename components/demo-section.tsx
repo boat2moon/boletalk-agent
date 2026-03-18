@@ -11,6 +11,7 @@ import {
   Video,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ImageWithSkeleton } from "@/components/image-with-skeleton";
 import {
   Carousel,
   type CarouselApi,
@@ -240,15 +241,12 @@ export function DemoSection() {
                       </span>
                     </div>
                   ) : (
-                    <>
-                      {/* biome-ignore lint/nursery/useImageSize: GIF carousel images */}
-                      {/* biome-ignore lint/performance/noImgElement: GIF needs raw img */}
-                      <img
-                        alt={demo.label}
-                        className="w-full rounded-xl"
-                        src={demo.image}
-                      />
-                    </>
+                    <ImageWithSkeleton
+                      alt={demo.label}
+                      className="rounded-xl"
+                      key={demo.key}
+                      src={demo.image}
+                    />
                   )}
                 </div>
               </CarouselItem>
