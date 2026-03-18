@@ -21,14 +21,14 @@ import {
 
 // 组件挂载时预加载所有 GIF，避免切换 Tab 时出现加载延迟
 const GIF_URLS = [
-  "/images/resume-analysis.gif",
-  "/images/mock-interview.gif",
-  "/images/interview-qa.gif",
-  "/images/evaluation-report.gif",
+  "/images/智能简历分析2.gif",
+  "/images/模拟面试场景2.gif",
+  "/images/面试题详解2.gif",
+  "/images/面试评估报告2.gif",
   "/images/RAG-MCP-Tools2.gif",
-  "/images/voice-chat.gif",
-  "/images/phone-interview.gif",
-  "/images/avatar-interview.gif",
+  "/images/基础语音对话2.gif",
+  "/images/端到端电话面试2.gif",
+  "/images/数字人视频面试2.gif",
 ];
 
 const demos = [
@@ -37,7 +37,7 @@ const demos = [
     icon: FileText,
     label: "简历智能分析",
     description: "可上传PDF简历，AI 自动分析并提供优化建议",
-    image: "/images/resume-analysis.gif",
+    image: "/images/智能简历分析2.gif",
     isPlaceholder: false,
   },
   {
@@ -45,7 +45,7 @@ const demos = [
     icon: MessageSquare,
     label: "模拟面试场景",
     description: "真实面试对话，实时反馈和评分",
-    image: "/images/mock-interview.gif",
+    image: "/images/模拟面试场景2.gif",
     isPlaceholder: false,
   },
   {
@@ -53,7 +53,7 @@ const demos = [
     icon: Code,
     label: "面试题详解",
     description: "经典面试题目，详细解答和思路分析",
-    image: "/images/interview-qa.gif",
+    image: "/images/面试题详解2.gif",
     isPlaceholder: false,
   },
   {
@@ -61,7 +61,7 @@ const demos = [
     icon: BarChart3,
     label: "面试评估报告",
     description: "多维度结构化评分 + 详细反馈，评估结果持久化",
-    image: "/images/evaluation-report.gif",
+    image: "/images/面试评估报告2.gif",
     isPlaceholder: false,
   },
   {
@@ -78,7 +78,7 @@ const demos = [
     icon: Mic,
     label: "基础语音对话",
     description: "双向流式 TTS + 实时 ASR，低延迟语音对话面试",
-    image: "/images/voice-chat.gif",
+    image: "/images/基础语音对话2.gif",
     isPlaceholder: false,
   },
   {
@@ -86,7 +86,7 @@ const demos = [
     icon: Phone,
     label: "端到端电话面试",
     description: "个性化人设注入，端到端实时语音大模型，真实通话体验",
-    image: "/images/phone-interview.gif",
+    image: "/images/端到端电话面试2.gif",
     isPlaceholder: false,
   },
   {
@@ -95,7 +95,7 @@ const demos = [
     label: "数字人视频面试",
     description:
       "数字人效果演示为廉价模型，实际可接入高级模型提供更真实体验  |  VAD 免按钮视频面试",
-    image: "/images/avatar-interview.gif",
+    image: "/images/数字人视频面试2.gif",
     isPlaceholder: false,
   },
 ];
